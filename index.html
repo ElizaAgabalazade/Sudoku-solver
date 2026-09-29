@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="az">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -34,13 +34,16 @@ body {
   font-family: var(--sans); background: radial-gradient(900px 500px at 50% -10%, rgba(224, 189, 118, .28), transparent 70%), linear-gradient(160deg, var(--bg1), var(--bg2));
   background-attachment: fixed;
 }
-.app { width: min(98vw, 1020px); padding: 34px 32px 36px; background: var(--panel); border: 1px solid var(--hair); border-radius: 28px; box-shadow: var(--card-shadow); }
+.app { width: min(100%, 1020px); padding: 34px 32px 36px; background: var(--panel); border: 1px solid var(--hair); border-radius: 28px; box-shadow: var(--card-shadow); }
 .head { text-align: center; margin-bottom: 30px; }
 h1 { margin: 0; font-family: var(--serif); font-weight: 600; font-size: clamp(2rem, 6vw, 3rem); letter-spacing: .01em; line-height: 1.05; }
 .rule { width: 56px; height: 2px; margin: 14px auto 12px; background: linear-gradient(90deg, var(--brass), var(--brass2)); border-radius: 2px; }
 .sub { margin: 0; color: var(--muted); font-size: .98rem; letter-spacing: .02em; }
+.mode-switch { display: flex; justify-content: center; gap: 4px; width: fit-content; margin: 0 auto 24px; padding: 4px; border: 1px solid var(--hair); border-radius: 12px; background: var(--bg1); }
+.mode-option { height: 38px; padding: 0 16px; border-color: transparent; }
+.mode-option.active { color: var(--ink); background: var(--panel); border-color: var(--hair); box-shadow: 0 2px 6px rgba(22, 50, 58, .12); }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; align-items: start; }
-.board-wrap { display: flex; flex-direction: column; align-items: center; overflow-x: auto; padding: 4px 4px 18px; }
+.board-wrap { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; overflow-x: auto; padding: 4px 4px 18px; }
 .stage { position: relative; width: max-content; }
 .board {
   display: grid; grid-template-columns: repeat(9, var(--cellsize)); grid-template-rows: repeat(9, var(--cellsize));
@@ -51,10 +54,11 @@ h1 { margin: 0; font-family: var(--serif); font-weight: 600; font-size: clamp(2r
   position: relative; width: var(--cellsize); height: var(--cellsize); border: 1px solid rgba(22, 50, 58, .16);
   background: var(--cell); display: grid; place-items: center; cursor: pointer; user-select: none; color: #16323a;
   font-family: var(--serif); font-weight: 700; font-size: clamp(1.3rem, 4.6vw, 1.95rem); font-variant-numeric: lining-nums; font-feature-settings: "lnum";
-  transition: filter .15s ease, box-shadow .15s ease;
+  transition: filter .15s ease, box-shadow .15s ease, transform .15s ease;
 }
 .cell:hover { filter: brightness(.95) saturate(1.1); }
-.cell.selected { background: var(--sel) !important; box-shadow: inset 0 0 0 2.5px var(--brass), inset 0 0 14px rgba(184, 137, 59, .35); }
+.cell.selected { background: var(--sel) !important; box-shadow: inset 0 0 0 2.5px var(--brass), inset 0 0 14px rgba(184, 137, 59, .35); animation: selection-pulse .22s ease-out; }
+@keyframes selection-pulse { 0% { transform: scale(.95); } 65% { transform: scale(1.03); } 100% { transform: scale(1); } }
 .cell::after { content: ''; position: absolute; inset: 3px; pointer-events: none; border: 0 dashed rgba(22, 50, 58, .55); }
 .cell.cb-t::after { border-top-width: 1.5px; }
 .cell.cb-r::after { border-right-width: 1.5px; }
@@ -99,7 +103,20 @@ h1 { margin: 0; font-family: var(--serif); font-weight: 600; font-size: clamp(2r
   height: 46px; padding: 0 16px; font: 500 1.1rem var(--sans); color: var(--ink); background: transparent;
   border: 1px solid var(--hair); border-radius: 12px; outline: none; transition: border-color .15s, box-shadow .15s;
 }
+.cage-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; width: min(100%, 460px); margin-top: 18px; }
+.cage-entry label { display: flex; flex-direction: column; gap: 8px; min-width: 0; color: var(--muted); font-size: .9rem; font-weight: 500; }
+.cage-entry input {
+  width: 100%; height: 46px; padding: 0 16px; font: 500 1.1rem var(--sans); color: var(--ink); background: transparent;
+  border: 1px solid var(--hair); border-radius: 12px; outline: none; transition: border-color .15s, box-shadow .15s;
+}
 .panel input:focus { border-color: var(--brass); box-shadow: 0 0 0 4px rgba(184, 137, 59, .18); }
+.cage-entry input:focus { border-color: var(--brass); box-shadow: 0 0 0 4px rgba(184, 137, 59, .18); }
+.number-pad { display: flex; flex-direction: column; gap: 10px; }
+.number-pad[hidden], .cage-entry[hidden], .cage-manager[hidden] { display: none; }
+.number-hint { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.4; }
+.digit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.digit-key { height: 42px; padding: 0; font-family: var(--serif); font-size: 1.25rem; font-weight: 700; }
+.number-clear { height: 40px; }
 button {
   height: 46px; padding: 0 18px; font: 500 .98rem var(--sans); letter-spacing: .02em; cursor: pointer; color: #fff;
   background: var(--ink); border: 1px solid var(--ink); border-radius: 12px; transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
@@ -112,12 +129,16 @@ button:active { transform: translateY(1px); box-shadow: none; }
 button.secondary { color: var(--ink); background: transparent; border-color: var(--hair); }
 button.secondary:hover { border-color: var(--brass); box-shadow: none; }
 button.solve { color: #2a1d06; font-weight: 600; background: linear-gradient(135deg, var(--brass2), var(--brass)); border-color: transparent; box-shadow: 0 10px 20px -12px rgba(184, 137, 59, .9); }
-button:disabled { opacity: .5; cursor: wait; transform: none; box-shadow: none; }
+button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
 button:focus-visible { outline: 3px solid rgba(184, 137, 59, .55); outline-offset: 2px; }
 .list-title { margin-top: 10px; font-family: var(--serif); font-size: 1.3rem; font-weight: 600; }
 .cage-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow: auto; margin-top: 8px; }
-.cage-list:empty::before { content: 'Hələ cage yoxdur. Xanaları seç və toplam yaz.'; color: var(--muted); font-size: .9rem; }
-.cage-item { padding: 9px 13px; border: 1px solid rgba(22, 50, 58, .14); border-left: 4px solid var(--brass); border-radius: 10px; font-size: .88rem; line-height: 1.4; color: #16323a; }
+.cage-list:empty::before { content: 'No cages yet. Select cells and enter a total.'; color: var(--muted); font-size: .9rem; }
+.cage-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 9px 8px 13px; border: 1px solid rgba(22, 50, 58, .14); border-left: 4px solid var(--brass); border-radius: 10px; font-size: .88rem; line-height: 1.4; color: #16323a; transition: transform .15s ease, box-shadow .15s ease; }
+.cage-item:hover { transform: translateX(2px); box-shadow: 0 4px 10px rgba(22, 50, 58, .08); }
+.cage-description { min-width: 0; flex: 1; }
+.cage-delete { flex: 0 0 auto; height: 34px; padding: 0 11px; color: #a1364d; background: transparent; border-color: rgba(161, 54, 77, .35); font-size: .82rem; }
+.cage-delete:hover { border-color: #a1364d; box-shadow: none; }
 .status {
   margin-top: 22px; min-height: 38px; padding: 8px 20px; width: fit-content; max-width: 100%; text-align: center;
   font-size: .95rem; font-weight: 500; color: var(--ink); border: 1px solid var(--hair); border-radius: 999px;
@@ -126,8 +147,10 @@ button:focus-visible { outline: 3px solid rgba(184, 137, 59, .55); outline-offse
 .status.error { color: #a1364d; border-color: #e6b8c2; background: rgba(217, 163, 168, .18); }
 .status.success { color: #1f6b52; border-color: #a9d3c3; background: rgba(143, 184, 168, .2); }
 @media (max-width: 760px) { .layout { grid-template-columns: 1fr; gap: 22px; } .app { padding: 26px 16px 28px; } }
+@media (max-width: 420px) { .cage-entry { grid-template-columns: 1fr; } .cage-entry button { width: 100%; } }
 @media (prefers-reduced-motion: reduce) {
-  .cell.flash, .cell .value.pop, .confetti, .thinking::before { animation: none !important; }
+  .cell.selected, .cell.flash, .cell .value.pop, .confetti, .thinking::before { animation: none !important; }
+  .cage-item { transition: none !important; }
   
 }
 </style>
@@ -137,7 +160,12 @@ button:focus-visible { outline: 3px solid rgba(184, 137, 59, .55); outline-offse
   <div class="head">
     <h1>Sudoku Cage Builder</h1>
     <div class="rule"></div>
-    <p class="sub">Xanaları seç, toplam yaz, sonra həll et</p>
+    <p id="modeHint" class="sub">Select cells to form cages and enter their totals.</p>
+  </div>
+
+  <div class="mode-switch" role="group" aria-label="Sudoku mode">
+    <button id="normalModeBtn" class="mode-option secondary" type="button" aria-pressed="false">Normal Sudoku</button>
+    <button id="killerModeBtn" class="mode-option active" type="button" aria-pressed="true">Killer Sudoku</button>
   </div>
 
   <div class="layout">
@@ -148,26 +176,45 @@ button:focus-visible { outline: 3px solid rgba(184, 137, 59, .55); outline-offse
           <div class="think-card">
             <div class="spinner"></div>
             <div>
-              <div class="think-title">Həll edilir</div>
-              <div class="think-time"><span id="thinkTime">0.0</span> saniyə</div>
+              <div class="think-title">Solving puzzle</div>
+              <div class="think-time"><span id="thinkTime">0.0</span> seconds</div>
             </div>
           </div>
         </div>
+      </div>
+      <div id="cageEntry" class="cage-entry">
+        <label>
+          Cage total
+          <input id="cageTotal" type="number" min="1" max="81" value="15" placeholder="e.g. 15" />
+        </label>
+        <button id="saveCageBtn">Save cage</button>
       </div>
       <div id="status" class="status"></div>
     </div>
 
     <div class="panel">
-      <label>
-        Cage total
-        <input id="cageTotal" type="number" min="1" max="81" value="15" placeholder="Məs. 15" />
-      </label>
-      <button id="saveCageBtn">Cage-i yadda saxla</button>
-      <button id="solveBtn" class="solve">Həll et</button>
-      <button id="clearSelectionBtn" class="secondary">Seçimi təmizlə</button>
-      <button id="resetBtn" class="secondary">Sıfırla</button>
-      <div class="list-title">Cage siyahısı</div>
-      <div id="cageList" class="cage-list"></div>
+      <button id="solveBtn" class="solve">Solve</button>
+      <button id="resetBtn" class="secondary">Reset</button>
+      <div id="numberPad" class="number-pad" hidden>
+        <div class="list-title">Enter clues</div>
+        <p class="number-hint">Select a cell, then choose a digit.</p>
+        <div class="digit-grid" role="group" aria-label="Choose a digit">
+          <button class="digit-key secondary" type="button" data-digit="1">1</button>
+          <button class="digit-key secondary" type="button" data-digit="2">2</button>
+          <button class="digit-key secondary" type="button" data-digit="3">3</button>
+          <button class="digit-key secondary" type="button" data-digit="4">4</button>
+          <button class="digit-key secondary" type="button" data-digit="5">5</button>
+          <button class="digit-key secondary" type="button" data-digit="6">6</button>
+          <button class="digit-key secondary" type="button" data-digit="7">7</button>
+          <button class="digit-key secondary" type="button" data-digit="8">8</button>
+          <button class="digit-key secondary" type="button" data-digit="9">9</button>
+        </div>
+        <button id="clearDigitBtn" class="number-clear secondary" type="button">Clear selected cell</button>
+      </div>
+      <div id="cageManager" class="cage-manager">
+        <div class="list-title">Cage list</div>
+        <div id="cageList" class="cage-list"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -177,12 +224,24 @@ const boardSize = 9;
 const cageColors = ['#dcebe4', '#f1dfe0', '#dce6f2', '#f3e9d3', '#e6def0', '#d6ebeb', '#f3ddd1', '#e4ebd3', '#ecdfe8', '#dfe3ee'];
 let selectedCells = [];
 let cages = [];
-let board = Array.from({ length: 9 }, () => Array(9).fill(0));
+let currentMode = 'killer';
+const createEmptyBoard = () => Array.from({ length: 9 }, () => Array(9).fill(0));
+let board = createEmptyBoard();
+const modeStates = {
+  killer: { board, selectedCells, cages },
+  normal: { board: createEmptyBoard(), selectedCells: [], cages: [] }
+};
 
 const boardEl = document.getElementById('board');
 const cageListEl = document.getElementById('cageList');
 const statusEl = document.getElementById('status');
 const cageTotalInput = document.getElementById('cageTotal');
+const normalModeBtn = document.getElementById('normalModeBtn');
+const killerModeBtn = document.getElementById('killerModeBtn');
+const modeHintEl = document.getElementById('modeHint');
+const cageEntryEl = document.getElementById('cageEntry');
+const numberPadEl = document.getElementById('numberPad');
+const cageManagerEl = document.getElementById('cageManager');
 const thinkingEl = document.getElementById('thinking');
 const timeEl = document.getElementById('thinkTime');
 const stageEl = document.getElementById('stage');
@@ -193,6 +252,29 @@ function setStatus(message, type = '') {
   statusEl.textContent = message;
   statusEl.classList.remove('error', 'success');
   if (type) statusEl.classList.add(type);
+}
+
+function switchMode(nextMode) {
+  if (solving || currentMode === nextMode) return;
+
+  modeStates[currentMode] = { board, selectedCells, cages };
+  currentMode = nextMode;
+  ({ board, selectedCells, cages } = modeStates[currentMode]);
+
+  const isNormal = currentMode === 'normal';
+  normalModeBtn.classList.toggle('active', isNormal);
+  normalModeBtn.setAttribute('aria-pressed', String(isNormal));
+  killerModeBtn.classList.toggle('active', !isNormal);
+  killerModeBtn.setAttribute('aria-pressed', String(!isNormal));
+  modeHintEl.textContent = isNormal
+    ? 'Enter the given numbers, then solve using standard Sudoku rules.'
+    : 'Select cells to form cages and enter their totals.';
+  cageEntryEl.hidden = isNormal;
+  numberPadEl.hidden = !isNormal;
+  cageManagerEl.hidden = isNormal;
+  renderBoard();
+  renderCages();
+  setStatus(isNormal ? 'Normal Sudoku mode.' : 'Killer Sudoku mode.');
 }
 
 function isSelectedCell(row, col) {
@@ -211,7 +293,7 @@ function renderBoard(reveal = false) {
       cell.className = 'cell';
       cell.style.setProperty('--d', ((row + col) * 45) + 'ms');
 
-      const cage = getCageForCell(row, col);
+      const cage = currentMode === 'killer' ? getCageForCell(row, col) : null;
       if (reveal) cell.classList.add('flash');
       if (cage) {
         const same = (r, c) => getCageForCell(r, c) === cage;
@@ -241,8 +323,13 @@ function renderBoard(reveal = false) {
       cell.dataset.col = col;
       cell.addEventListener('click', () => {
         if (solving) return;
+        if (currentMode === 'normal') {
+          selectedCells = [[row, col]];
+          renderBoard();
+          return;
+        }
         if (cage) {
-          setStatus('Bu xana artıq cage-ə mənsubdur.', 'error');
+          setStatus('This cell already belongs to a cage.', 'error');
           return;
         }
         toggleSelectedCell(row, col);
@@ -267,27 +354,44 @@ function renderCages() {
   cages.forEach((cage, index) => {
     const item = document.createElement('div');
     item.className = 'cage-item';
-    item.textContent = `Cage ${index + 1}: ${cage.cells.map(([r, c]) => `(${r + 1},${c + 1})`).join(' ')} | Toplam: ${cage.total}`;
+    const description = document.createElement('span');
+    description.className = 'cage-description';
+    description.textContent = `Cage ${index + 1}: ${cage.cells.map(([r, c]) => `(${r + 1},${c + 1})`).join(' ')} | Total: ${cage.total}`;
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'cage-delete';
+    deleteButton.textContent = 'Delete';
+    deleteButton.setAttribute('aria-label', `Delete cage ${index + 1}`);
+    deleteButton.addEventListener('click', () => deleteCage(index));
     item.style.background = cageColors[cage.colorIndex % cageColors.length];
+    item.append(description, deleteButton);
     cageListEl.appendChild(item);
   });
 }
 
+function deleteCage(index) {
+  if (!cages[index]) return;
+  cages.splice(index, 1);
+  renderBoard();
+  renderCages();
+  setStatus(`Cage ${index + 1} deleted.`, 'success');
+}
+
 function saveCurrentCage() {
   if (!selectedCells.length) {
-    setStatus('Əvvəlcə xanaları seç.', 'error');
+    setStatus('Select some cells first.', 'error');
     return;
   }
 
   const total = Number(cageTotalInput.value);
   if (!Number.isInteger(total) || total < 1 || total > 81) {
-    setStatus('Düzgün total daxil et (1-81).', 'error');
+    setStatus('Enter a valid total (1-81).', 'error');
     return;
   }
 
   const overlapping = selectedCells.filter(([row, col]) => getCageForCell(row, col));
   if (overlapping.length) {
-    setStatus('Seçilmiş xanaların bəzisi artıq cage-ə aididir.', 'error');
+    setStatus('Some selected cells already belong to a cage.', 'error');
     return;
   }
 
@@ -300,13 +404,7 @@ function saveCurrentCage() {
   selectedCells = [];
   renderBoard();
   renderCages();
-  setStatus(`Cage yadda saxlanıldı: ${total}`, 'success');
-}
-
-function clearSelection() {
-  selectedCells = [];
-  renderBoard();
-  setStatus('Seçim təmizləndi.', 'success');
+  setStatus(`Cage saved: ${total}`, 'success');
 }
 
 function cloneBoard(grid) {
@@ -373,6 +471,35 @@ function isValidSudokuPlacement(grid, row, col, value) {
   return true;
 }
 
+function enterNormalDigit(value) {
+  if (!selectedCells.length) {
+    setStatus('Select a cell first.', 'error');
+    return;
+  }
+
+  const [row, col] = selectedCells[0];
+  if (!isValidSudokuPlacement(board, row, col, value)) {
+    setStatus('That digit conflicts with its row, column, or 3x3 box.', 'error');
+    return;
+  }
+
+  board[row][col] = value;
+  renderBoard();
+  setStatus(`Entered ${value} at row ${row + 1}, column ${col + 1}.`, 'success');
+}
+
+function clearNormalDigit() {
+  if (!selectedCells.length) {
+    setStatus('Select a cell first.', 'error');
+    return;
+  }
+
+  const [row, col] = selectedCells[0];
+  board[row][col] = 0;
+  renderBoard();
+  setStatus('Cell cleared.', 'success');
+}
+
 function cageIsCompatible(grid, cage, row, col, value) {
   const next = cloneBoard(grid);
   next[row][col] = value;
@@ -406,26 +533,35 @@ function cageIsCompatible(grid, cage, row, col, value) {
 }
 
 function findEmptyCell(grid) {
+  let bestCell = null;
   for (let row = 0; row < 9; row++) {
     for (let col = 0; col < 9; col++) {
-      if (grid[row][col] === 0) return { row, col };
+      if (grid[row][col] !== 0) continue;
+
+      const candidates = [];
+      const cage = getCageForCell(row, col);
+      for (let value = 1; value <= 9; value++) {
+        if (!isValidSudokuPlacement(grid, row, col, value)) continue;
+        if (cage && !cageIsCompatible(grid, cage, row, col, value)) continue;
+        candidates.push(value);
+      }
+
+      if (!bestCell || candidates.length < bestCell.candidates.length) {
+        bestCell = { row, col, candidates };
+      }
+      if (candidates.length <= 1) return bestCell;
     }
   }
-  return null;
+  return bestCell;
 }
 
 function solveKillerSudoku(grid) {
-  const empty = findEmptyCell(grid);
-  if (!empty) return true;
+  const nextCell = findEmptyCell(grid);
+  if (!nextCell) return true;
+  if (nextCell.candidates.length === 0) return false;
 
-  const { row, col } = empty;
-
-  for (let value = 1; value <= 9; value++) {
-    if (!isValidSudokuPlacement(grid, row, col, value)) continue;
-
-    const cage = getCageForCell(row, col);
-    if (cage && !cageIsCompatible(grid, cage, row, col, value)) continue;
-
+  const { row, col, candidates } = nextCell;
+  for (const value of candidates) {
     grid[row][col] = value;
     if (solveKillerSudoku(grid)) return true;
     grid[row][col] = 0;
@@ -443,7 +579,7 @@ function validateAllCellsAssigned() {
   }
 
   if (missing > 0) {
-    setStatus(`Bütün xanalar rənglənməyib. ${missing} xana totala əlavə edilməyib.`, 'error');
+    setStatus(`${missing} cells are not assigned to a cage.`, 'error');
     return false;
   }
   return true;
@@ -499,7 +635,7 @@ function setBusy(on) {
   solving = on;
   boardEl.classList.toggle('solving', on);
   thinkingEl.hidden = !on;
-  document.querySelectorAll('.panel button').forEach((b) => { b.disabled = on; });
+  document.querySelectorAll('.app button').forEach((button) => { button.disabled = on; });
 }
 
 function celebrate() {
@@ -520,16 +656,21 @@ function celebrate() {
 
 function solve() {
   if (solving) return;
-  if (cages.length === 0) {
-    setStatus('Əvvəlcə cage əlavə et.', 'error');
+  if (currentMode === 'killer') {
+    if (cages.length === 0) {
+      setStatus('Add at least one cage first.', 'error');
+      return;
+    }
+    if (!validateAllCellsAssigned()) return;
+  } else if (!board.some((row) => row.some((value) => value !== 0))) {
+    setStatus('Enter at least one given number first.', 'error');
     return;
   }
-  if (!validateAllCellsAssigned()) return;
 
   selectedCells = [];
   renderBoard();
   setBusy(true);
-  setStatus('Həll edilir…');
+  setStatus('Solving…');
   const t0 = Date.now();
   timeEl.textContent = '0.0';
   timerId = setInterval(() => { timeEl.textContent = ((Date.now() - t0) / 1000).toFixed(1); }, 100);
@@ -541,10 +682,10 @@ function solve() {
       board = result;
       renderBoard(true);
       celebrate();
-      setStatus('Sudoku həll oldu', 'success');
+      setStatus('Sudoku solved.', 'success');
     } else {
       renderBoard();
-      setStatus('Bu konfiqurasiya ilə həll tapılmadı.', 'error');
+      setStatus('No solution found for this configuration.', 'error');
     }
   });
 }
@@ -555,8 +696,25 @@ function resetAll() {
   board = Array.from({ length: 9 }, () => Array(9).fill(0));
   renderBoard();
   renderCages();
-  setStatus('Sıfırlandı.', 'success');
+  setStatus('Board reset.', 'success');
 }
+
+normalModeBtn.addEventListener('click', () => switchMode('normal'));
+killerModeBtn.addEventListener('click', () => switchMode('killer'));
+document.querySelectorAll('.digit-key').forEach((button) => {
+  button.addEventListener('click', () => enterNormalDigit(Number(button.dataset.digit)));
+});
+document.getElementById('clearDigitBtn').addEventListener('click', clearNormalDigit);
+document.addEventListener('keydown', (event) => {
+  if (currentMode !== 'normal' || !selectedCells.length || event.target.closest('input, textarea, select')) return;
+  if (/^[1-9]$/.test(event.key)) {
+    event.preventDefault();
+    enterNormalDigit(Number(event.key));
+  } else if (event.key === 'Backspace' || event.key === 'Delete' || event.key === '0') {
+    event.preventDefault();
+    clearNormalDigit();
+  }
+});
 
 cageTotalInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
@@ -566,7 +724,6 @@ cageTotalInput.addEventListener('keydown', (event) => {
 });
 
 document.getElementById('saveCageBtn').addEventListener('click', saveCurrentCage);
-document.getElementById('clearSelectionBtn').addEventListener('click', clearSelection);
 document.getElementById('solveBtn').addEventListener('click', solve);
 document.getElementById('resetBtn').addEventListener('click', resetAll);
 
