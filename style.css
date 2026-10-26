@@ -8,55 +8,90 @@
   --accent: #2563eb;
   --accent-dark: #1d4ed8;
   --border-soft: #aab7c4;
+
+  /* Xananın ölçüsü ekrana görə avtomatik hesablanır:
+     eninə görə, hündürlüyə görə (landscape üçün) və maksimum 56px */
+  --cell: min(56px, calc((100vw - 48px) / 9), calc((100vh - 190px) / 9));
+  --cell: min(56px, calc((100vw - 48px) / 9), calc((100dvh - 190px) / 9));
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
   background: linear-gradient(135deg, #e0f2fe, #f8fafc);
   font-family: Arial, sans-serif;
 }
 
 .app {
+  width: max-content;
+  max-width: 100%;
   background: var(--panel);
-  padding: 24px 20px 18px;
+  padding: clamp(12px, 3vw, 24px) clamp(10px, 3vw, 20px) clamp(12px, 2.5vw, 18px);
   border-radius: 16px;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15);
 }
 
 h1 {
-  margin: 0 0 18px;
+  margin: 0 0 clamp(10px, 2.5vw, 18px);
   text-align: center;
-  font-size: 2rem;
+  font-size: clamp(1.3rem, 5.5vw, 2rem);
   color: #111827;
 }
 
 .board {
   display: grid;
-  grid-template-columns: repeat(9, 52px);
-  grid-template-rows: repeat(9, 52px);
-  border: 4px solid var(--line);
+  grid-template-columns: repeat(9, var(--cell));
+  grid-template-rows: repeat(9, var(--cell));
+  border: clamp(2px, 0.6vw, 4px) solid var(--line);
   width: max-content;
+  max-width: 100%;
+  margin-inline: auto;
   background: var(--cell-bg);
+  touch-action: manipulation;
 }
 
 .cell {
-  width: 52px;
-  height: 52px;
+  width: var(--cell);
+  height: var(--cell);
+  min-width: 0;
   border: 1px solid var(--border-soft);
+  border-radius: 0;
   text-align: center;
-  font-size: 1.4rem;
+  /* 16px-dən kiçik olmasın: iOS Safari input-a fokus olanda zoom etməsin */
+  font-size: max(16px, calc(var(--cell) * 0.5));
   font-weight: 700;
   color: var(--given);
   background: var(--empty);
   outline: none;
   padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  -moz-appearance: textfield;
+  caret-color: transparent;
+}
+
+.cell::-webkit-outer-spin-button,
+.cell::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .cell:focus {
@@ -84,14 +119,16 @@ h1 {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 12px;
-  margin-top: 18px;
+  margin-top: clamp(12px, 3vw, 18px);
 }
 
 button {
   border: none;
   border-radius: 10px;
+  min-height: 44px; /* barmaqla basmaq üçün rahat ölçü */
   padding: 12px 18px;
   font-size: 1rem;
   font-weight: 700;
@@ -99,11 +136,21 @@ button {
   color: white;
   background: var(--accent);
   transition: transform 0.15s ease, background 0.15s ease;
+  touch-action: manipulation;
 }
 
 button:hover {
   background: var(--accent-dark);
   transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
 }
 
 button.secondary {
@@ -112,4 +159,60 @@ button.secondary {
 
 button.secondary:hover {
   background: #334155;
+}
+
+/* ===== Kiçik telefonlar ===== */
+@media (max-width: 400px) {
+  .actions {
+    gap: 8px;
+  }
+
+  button {
+    flex: 1 1 0;
+    padding: 12px 10px;
+    font-size: 0.95rem;
+  }
+}
+
+/* ===== Telefon landscape (aşağı hündürlük) ===== */
+@media (max-height: 500px) and (orientation: landscape) {
+  body {
+    place-items: start center;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+  }
+
+  .app {
+    padding: 8px 12px;
+  }
+
+  .actions {
+    margin-top: 8px;
+  }
+
+  button {
+    min-height: 38px;
+    padding: 8px 14px;
+  }
+}
+
+/* ===== Hover olmayan (toxunma) cihazlar ===== */
+@media (hover: none) {
+  button:hover {
+    transform: none;
+  }
+
+  button:active {
+    background: var(--accent-dark);
+  }
+}
+
+/* ===== Animasiyanı azaltmaq istəyənlər üçün ===== */
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
 }
