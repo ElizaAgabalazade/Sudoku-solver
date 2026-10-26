@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Sudoku Cage Builder</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2316323a'/%3E%3Crect x='3' y='3' width='26' height='26' rx='2' fill='%23fbfcfd'/%3E%3Cpath stroke='%2316323a' stroke-width='1.2' d='M3 13.5h26M3 18.5h26M13.5 3v26M18.5 3v26'/%3E%3Cpath stroke='%23b8893b' stroke-width='2.2' fill='none' d='M7 7h8v8H7z'/%3E%3Ctext x='10.5' y='13.2' font-family='Georgia,serif' font-size='7' font-weight='700' fill='%2316323a'%3E15%3C/text%3E%3C/svg%3E" type="image/svg+xml" />
+<link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2316323a'/%3E%3Crect x='3' y='3' width='26' height='26' rx='2' fill='%23fbfcfd'/%3E%3Cpath stroke='%2316323a' stroke-width='1.2' d='M3 13.5h26M3 18.5h26M13.5 3v26M18.5 3v26'/%3E%3Cpath stroke='%23b8893b' stroke-width='2.2' fill='none' d='M7 7h8v8H7z'/%3E%3Ctext x='10.5' y='13.2' font-family='Georgia,serif' font-size='7' font-weight='700' fill='%2316323a'%3E15%3C/text%3E%3C/svg%3E" type="image/svg+xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@400;500;600&display=swap" rel="stylesheet" />
 <script>
@@ -383,6 +383,26 @@ const imageBtn = document.getElementById('imageBtn');
 let solving = false;
 let timerId = null;
 
+/* ---------- favicon: həll olunanda ✓, əks halda əsas ikon ---------- */
+const FAVICON_DEFAULT = document.getElementById('favicon').getAttribute('href');
+const FAVICON_SOLVED = 'data:image/svg+xml,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>" +
+  "<rect width='32' height='32' rx='6' fill='#1f6b52'/>" +
+  "<path d='M8 16.5l5.5 5.5L24 10.5' fill='none' stroke='#fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/>" +
+  "</svg>"
+);
+
+const setFavicon = (solved = false) => {
+  // Bəzi brauzerlər href dəyişəndə ikonu yeniləmir, ona görə elementi yenidən yaradırıq
+  const link = document.createElement('link');
+  link.id = 'favicon';
+  link.rel = 'icon';
+  link.type = 'image/svg+xml';
+  link.href = solved ? FAVICON_SOLVED : FAVICON_DEFAULT;
+  document.getElementById('favicon').replaceWith(link);
+  document.title = solved ? '✓ Sudoku Cage Builder' : 'Sudoku Cage Builder';
+};
+
 function setStatus(message, type = '') {
   statusEl.textContent = message;
   statusEl.classList.remove('error', 'success');
@@ -428,6 +448,7 @@ function switchMode(nextMode) {
   modeStates[currentMode] = { board, selectedCells, cages };
   currentMode = nextMode;
   ({ board, selectedCells, cages } = modeStates[currentMode]);
+  setFavicon(false);
 
   const isNormal = currentMode === 'normal';
   normalModeBtn.classList.toggle('active', isNormal);
@@ -593,6 +614,7 @@ function updateUndo() {
 function undoLastCage() {
   if (solving || !cages.length) return;
   const removed = cages.pop();
+  setFavicon(false);
   renderBoard();
   renderCages();
   setStatus(`Last cage removed (total ${removed.total}).`, 'success');
@@ -632,6 +654,7 @@ function renderCages() {
 function deleteCage(index) {
   if (!cages[index]) return;
   cages.splice(index, 1);
+  setFavicon(false);
   renderBoard();
   renderCages();
   setStatus(`Cage ${index + 1} deleted.`, 'success');
@@ -649,6 +672,7 @@ function saveCurrentCage() {
     cage.total = newTotal;
     const number = editingCageIndex + 1;
     closeCageModal();
+    setFavicon(false);
     renderBoard();
     renderCages();
     setStatus(`Cage ${number} total changed to ${newTotal}.`, 'success');
@@ -680,6 +704,7 @@ function saveCurrentCage() {
 
   selectedCells = [];
   closeCageModal();
+  setFavicon(false);
   renderBoard();
   renderCages();
   updateHint();
@@ -764,6 +789,7 @@ function enterNormalDigit(value) {
   }
 
   board[row][col] = value;
+  setFavicon(false);
   let nextRow = row;
   let nextCol = col + 1;
   if (nextCol > 8) { nextCol = 0; nextRow = Math.min(8, row + 1); if (row === 8) nextCol = 8; }
@@ -780,6 +806,7 @@ function clearNormalDigit() {
 
   const [row, col] = selectedCells[0];
   board[row][col] = 0;
+  setFavicon(false);
   renderBoard();
   setStatus('Cell cleared.', 'success');
 }
@@ -963,6 +990,7 @@ function solve() {
 
   selectedCells = [];
   renderBoard();
+  setFavicon(false);
   setBusy(true);
   setStatus('Solving…');
   startTimer();
@@ -974,6 +1002,7 @@ function solve() {
       board = result;
       renderBoard(true);
       celebrate();
+      setFavicon(true);
       setStatus('Sudoku solved.', 'success');
     } else {
       renderBoard();
@@ -986,6 +1015,7 @@ function resetAll() {
   selectedCells = [];
   cages = [];
   board = Array.from({ length: 9 }, () => Array(9).fill(0));
+  setFavicon(false);
   renderBoard();
   renderCages();
   updateHint();
@@ -1150,6 +1180,7 @@ async function readWithClaude(file, key, model, mode) {
 }
 
 function applyImageResult(data, opts = {}) {
+  setFavicon(false);
   const grid = normalizeGivens(data.givens);
 
   if (currentMode === 'normal') {
