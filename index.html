@@ -83,7 +83,7 @@
       </details>
 
       <div class="topline">
-        <span id="timer" class="timer" hidden>00:00</span>
+        
         <button id="soundBtn" type="button" class="secondary small" aria-pressed="true">Sound: on</button>
       </div>
 
@@ -163,7 +163,6 @@ let editingCageIndex = -1;
 const $ = (id) => document.getElementById(id);
 const boardEl = $('board'), stageEl = $('stage'), statusEl = $('status'), cageListEl = $('cageList');
 const cageTotalInput = $('cageTotal'), cageModalEl = $('cageModal'), modalErrorEl = $('modalError'), modalInfoEl = $('modalInfo');
-const timerEl = $('timer');
 const timeEl = $('thinkTime'), thinkingEl = $('thinking'), thinkTitleEl = $('thinkTitle'), boardWrapEl = $('boardWrap');
 const apiKeyInput = $('apiKey'), imageFileInput = $('imageFile'), imageBtn = $('imageBtn');
 let timerId = null, flickerId = null;
@@ -291,7 +290,6 @@ function fmt(ms) {
   const s = Math.floor(ms / 1000);
   return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
 }
-setInterval(() => { timerEl.textContent = fmt(elapsed()); }, 500);
 
 /* ---------- save / load ---------- */
 const SAVE_KEY = 'sudokuPlay.v1';
@@ -334,7 +332,6 @@ function updateChrome() {
   $('numberPad').hidden = killerSetup;
   $('cageManager').hidden = !(!normal && !inPlay());
   $('cageHint').hidden = !killerSetup;
-  timerEl.hidden = !inPlay();
 
   if (editingGivens()) {
     $('padTitle').textContent = 'Enter clues';
@@ -423,7 +420,13 @@ function render(reveal = false) {
         if (first[0] === r && first[1] === c) {
           const label = document.createElement('span');
           label.className = 'cage-label';
-          label.textContent = cage.total;
+          let shown = cage.total;
+          if (inPlay()) {
+            const filled = cage.cells.reduce((acc, [cr, cc]) => acc + value(cr, cc), 0);
+            shown = cage.total - filled;
+            if (shown < 0) label.classList.add('over');
+          }
+          label.textContent = shown;
           cell.appendChild(label);
         }
       }
@@ -457,7 +460,6 @@ function checkWin() {
   if (solved && !solvedShown) {
     solvedShown = true;
     pauseTimer();
-    timerEl.textContent = fmt(elapsed());
     render(true);
     setFavicon(true);
     if (autoSolved) {
@@ -465,7 +467,7 @@ function checkWin() {
     } else {
       celebrate();
       playFanfare();
-      setStatus(`Solved in ${fmt(elapsed())}. Well done!`, 'success');
+      setStatus('Solved! Well done!', 'success');
     }
     autoSolved = false;
     save();
