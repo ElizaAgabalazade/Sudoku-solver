@@ -611,7 +611,6 @@ function clearEntries() {
 }
 
 function resetAll() {
-  if (!confirm('Reset everything for this mode (cages, clues and entries)?')) return;
   timerStart = null;
   store[mode] = newState();
   st = store[mode];
