@@ -175,12 +175,27 @@ const FAVICON_DEFAULT = $('favicon').getAttribute('href');
 const FAVICON_SOLVED = 'data:image/svg+xml,' + encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='#1f6b52'/>" +
   "<path d='M8 16.5l5.5 5.5L24 10.5' fill='none' stroke='#fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-function setFavicon(solved) {
+const FAVICON_SOLVING = 'data:image/svg+xml,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='#b8893b'/>" +
+  "<circle cx='8' cy='16' r='3' fill='#fff'/><circle cx='16' cy='16' r='3' fill='#fff' opacity='.75'/><circle cx='24' cy='16' r='3' fill='#fff' opacity='.5'/></svg>");
+const FAVICON_FAILED = 'data:image/svg+xml,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='#b23a48'/>" +
+  "<path d='M9.5 9.5l13 13M22.5 9.5l-13 13' fill='none' stroke='#fff' stroke-width='3.5' stroke-linecap='round'/></svg>");
+/* state: false/'idle' = boş, 'solving' = həll olunur, true/'solved' = həll olundu, 'failed' = həll tapılmadı */
+function setFavicon(state) {
+  const key = state === true ? 'solved' : (['solving', 'solved', 'failed'].includes(state) ? state : 'idle');
+  const icons = { solved: FAVICON_SOLVED, solving: FAVICON_SOLVING, failed: FAVICON_FAILED, idle: FAVICON_DEFAULT };
+  const titles = {
+    solved: '✓ Sudoku Cage Builder',
+    solving: '… Solving – Sudoku Cage Builder',
+    failed: '✗ No solution – Sudoku Cage Builder',
+    idle: 'Sudoku Cage Builder'
+  };
   const link = document.createElement('link');
   link.id = 'favicon'; link.rel = 'icon'; link.type = 'image/svg+xml';
-  link.href = solved ? FAVICON_SOLVED : FAVICON_DEFAULT;
+  link.href = icons[key];
   $('favicon').replaceWith(link);
-  document.title = solved ? '✓ Sudoku Cage Builder' : 'Sudoku Cage Builder';
+  document.title = titles[key];
 }
 
 function setStatus(message, type = '') {
@@ -940,13 +955,14 @@ function solveNow() {
   selectedCells = [];
   st.vals = mk(); st.notes = mk(); st.autoFilled = false;
   render();
-  setFavicon(false);
+  setFavicon('solving');
   setBusy(true);
   setStatus('Solving…');
   startTimer();
   runSolver(cloneBoard(st.givens), mode === 'killer' ? st.cages : []).then((result) => {
     clearInterval(timerId);
     setBusy(false);
+    if (!result) setFavicon('failed');
     if (result) {
       st.vals = result.map((row, r) => row.map((v, c) => (st.givens[r][c] ? 0 : v)));
       st.autoFilled = true;
