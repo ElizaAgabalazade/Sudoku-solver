@@ -48,11 +48,6 @@
     </div>
 
     <div class="panel">
-      <div class="topline">
-        <button id="resetBtn" type="button" class="secondary small">Reset everything</button>
-        <button id="soundBtn" type="button" class="secondary small" aria-pressed="true">Sound: on</button>
-      </div>
-
       <div class="seg" id="solverChoice" role="group" aria-label="Who solves">
         <button id="draftBtn" type="button" class="active">Draft</button>
         <button id="solverBtn" type="button">Solver</button>
@@ -87,6 +82,11 @@
         </div>
       </details>
 
+      <div class="topline">
+         <button id="resetBtn" class="secondary" type="button">Reset everything</button>
+        <button id="soundBtn" type="button" class="secondary small" aria-pressed="true">Sound: on</button>
+      </div>
+
       <div id="numberPad" class="number-pad" hidden>
         <div id="padTitle" class="list-title">Play</div>
         <p id="padHint" class="number-hint"></p>
@@ -116,6 +116,7 @@
       </div>
 
       <button id="clearBtn" class="secondary" type="button">Clear my entries</button>
+     
     </div>
   </div>
 </div>
@@ -140,11 +141,1758 @@
 </div>
 
 <script>
-/* Reset üçün təsdiq: script.js-dəki resetAll() işləməzdən əvvəl soruşur */
-document.getElementById('resetBtn').addEventListener('click', function (e) {
-  if (!confirm('Reset the whole board for this mode? This cannot be undone.')) e.stopImmediatePropagation();
+const cageColors = Array.from({ length: 10 }, (_, i) => `var(--cg${i})`);
+const mk = () => Array.from({ length: 9 }, () => Array(9).fill(0));
+const newState = () => ({ cages: [], givens: mk(), vals: mk(), notes: mk(), phase: 'setup', elapsed: 0, autoFilled: false });
+const store = { killer: newState(), normal: newState() };
+let mode = 'killer';
+let st = store.killer;
+let sel = null;            // selected cell while playing / entering clues
+let selectedCells = [];    // cells being dragged for a new cage
+let pencil = false;
+let showMistakes = false;
+let soundOn = true;
+let solverMode = 'self';   // 'self' = I solve, 'auto' = computer solves
+let solving = false;
+let autoSolved = false;
+let history = [];
+let solvedShown = false;
+let timerStart = null;
+let editingCageIndex = -1;
+
+const $ = (id) => document.getElementById(id);
+const boardEl = $('board'), stageEl = $('stage'), statusEl = $('status'), cageListEl = $('cageList');
+const cageTotalInput = $('cageTotal'), cageModalEl = $('cageModal'), modalErrorEl = $('modalError'), modalInfoEl = $('modalInfo');
+const timeEl = $('thinkTime'), thinkingEl = $('thinking'), thinkTitleEl = $('thinkTitle'), boardWrapEl = $('boardWrap');
+const apiKeyInput = $('apiKey'), imageFileInput = $('imageFile'), imageBtn = $('imageBtn');
+let timerId = null, flickerId = null;
+const createEmptyBoard = mk;
+const isValidSudokuPlacement = (...args) => isValidPlacement(...args);
+function renderBoard() { render(); updateChrome(); save(); }
+
+/* ---------- favicon ---------- */
+const FAVICON_DEFAULT = $('favicon').getAttribute('href');
+const FAVICON_SOLVED = 'data:image/svg+xml,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='#1f6b52'/>" +
+  "<path d='M8 16.5l5.5 5.5L24 10.5' fill='none' stroke='#fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+const FAVICON_SOLVING = 'data:image/svg+xml,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='#b8893b'/>" +
+  "<circle cx='8' cy='16' r='3' fill='#fff'/><circle cx='16' cy='16' r='3' fill='#fff' opacity='.75'/><circle cx='24' cy='16' r='3' fill='#fff' opacity='.5'/></svg>");
+const FAVICON_FAILED = 'data:image/svg+xml,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='#b23a48'/>" +
+  "<path d='M9.5 9.5l13 13M22.5 9.5l-13 13' fill='none' stroke='#fff' stroke-width='3.5' stroke-linecap='round'/></svg>");
+/* state: false/'idle' = boş, 'solving' = həll olunur, true/'solved' = həll olundu, 'failed' = həll tapılmadı */
+function setFavicon(state) {
+  const key = state === true ? 'solved' : (['solving', 'solved', 'failed'].includes(state) ? state : 'idle');
+  const icons = { solved: FAVICON_SOLVED, solving: FAVICON_SOLVING, failed: FAVICON_FAILED, idle: FAVICON_DEFAULT };
+  const titles = {
+    solved: '✓ Sudoku Cage Builder',
+    solving: '… Solving – Sudoku Cage Builder',
+    failed: '✗ No solution – Sudoku Cage Builder',
+    idle: 'Sudoku Cage Builder'
+  };
+  const link = document.createElement('link');
+  link.id = 'favicon'; link.rel = 'icon'; link.type = 'image/svg+xml';
+  link.href = icons[key];
+  $('favicon').replaceWith(link);
+  document.title = titles[key];
+}
+
+function setStatus(message, type = '') {
+  statusEl.textContent = message;
+  statusEl.classList.remove('error', 'success');
+  if (type) statusEl.classList.add(type);
+}
+
+/* ---------- sound (WebAudio, no files needed) ---------- */
+let audioCtx = null;
+function ensureAudio() {
+  try {
+    if (!audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); }
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (err) { /* ignore */ }
+  return audioCtx;
+}
+function tone(freq, start, dur, type = 'triangle', vol = 0.18) {
+  const t0 = audioCtx.currentTime + start;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.05);
+}
+function playFanfare() {
+  if (!soundOn || !ensureAudio()) return;
+  [[523.25, 0], [659.25, .12], [783.99, .24], [1046.5, .36], [783.99, .54], [1046.5, .66], [1318.5, .84]]
+    .forEach(([f, t]) => tone(f, t, .35));
+  [1046.5, 1318.5, 1568].forEach((f) => tone(f, 1.05, 1.2, 'sine', .12));
+}
+document.addEventListener('pointerdown', ensureAudio);
+document.addEventListener('keydown', ensureAudio);
+
+/* ---------- helpers ---------- */
+const value = (r, c) => st.givens[r][c] || st.vals[r][c];
+const cageOf = (r, c) => st.cages.find((g) => g.cells.some(([a, b]) => a === r && b === c));
+const isSelected = (r, c) => selectedCells.some(([a, b]) => a === r && b === c) || (sel && sel[0] === r && sel[1] === c);
+const inPlay = () => st.phase === 'play';
+const editingGivens = () => mode === 'normal' && st.phase === 'setup';
+
+const UNITS = (() => {
+  const u = [];
+  for (let i = 0; i < 9; i++) {
+    u.push(Array.from({ length: 9 }, (_, j) => [i, j]));
+    u.push(Array.from({ length: 9 }, (_, j) => [j, i]));
+  }
+  for (let br = 0; br < 3; br++) for (let bc = 0; bc < 3; bc++) {
+    const cells = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) cells.push([br * 3 + r, bc * 3 + c]);
+    u.push(cells);
+  }
+  return u;
+})();
+
+function conflicts() {
+  const bad = new Set();
+  for (const unit of UNITS) {
+    const seen = new Map();
+    for (const [r, c] of unit) {
+      const v = value(r, c);
+      if (!v) continue;
+      if (!seen.has(v)) seen.set(v, []);
+      seen.get(v).push(r * 9 + c);
+    }
+    seen.forEach((list) => { if (list.length > 1) list.forEach((k) => bad.add(k)); });
+  }
+  if (mode === 'killer') {
+    for (const cage of st.cages) {
+      const seen = new Map();
+      const filled = [];
+      let sum = 0;
+      for (const [r, c] of cage.cells) {
+        const v = value(r, c);
+        if (!v) continue;
+        filled.push(r * 9 + c);
+        sum += v;
+        if (!seen.has(v)) seen.set(v, []);
+        seen.get(v).push(r * 9 + c);
+      }
+      seen.forEach((list) => { if (list.length > 1) list.forEach((k) => bad.add(k)); });
+      if (sum > cage.total || (filled.length === cage.cells.length && sum !== cage.total)) filled.forEach((k) => bad.add(k));
+    }
+  }
+  return bad;
+}
+
+function isSolved() {
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) if (!value(r, c)) return false;
+  if (mode === 'killer') {
+    const used = new Set();
+    st.cages.forEach((g) => g.cells.forEach(([r, c]) => used.add(r * 9 + c)));
+    if (used.size < 81) return false;
+  }
+  return conflicts().size === 0;
+}
+
+/* ---------- timer ---------- */
+const elapsed = () => st.elapsed + (timerStart ? Date.now() - timerStart : 0);
+function pauseTimer() { if (timerStart) { st.elapsed += Date.now() - timerStart; timerStart = null; } }
+function resumeTimer() { if (!timerStart && inPlay() && !solvedShown) timerStart = Date.now(); }
+function fmt(ms) {
+  const s = Math.floor(ms / 1000);
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+
+/* ---------- save / load ---------- */
+const SAVE_KEY = 'sudokuPlay.v1';
+function save() {
+  try {
+    const pack = (s) => ({ ...s, elapsed: s === st ? elapsed() : s.elapsed });
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ mode, soundOn, showMistakes, solverMode, store: { killer: pack(store.killer), normal: pack(store.normal) } }));
+  } catch (err) { /* storage unavailable */ }
+}
+function okGrid(g) { return Array.isArray(g) && g.length === 9 && g.every((r) => Array.isArray(r) && r.length === 9); }
+function load() {
+  try {
+    const data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    if (!data || !data.store) return;
+    ['killer', 'normal'].forEach((k) => {
+      const s = data.store[k];
+      if (s && okGrid(s.givens) && okGrid(s.vals) && okGrid(s.notes) && Array.isArray(s.cages)) {
+        store[k] = { cages: s.cages, givens: s.givens, vals: s.vals, notes: s.notes, phase: s.phase === 'play' ? 'play' : 'setup', elapsed: Number(s.elapsed) || 0, autoFilled: !!s.autoFilled };
+      }
+    });
+    mode = data.mode === 'normal' ? 'normal' : 'killer';
+    st = store[mode];
+    soundOn = data.soundOn !== false;
+    showMistakes = !!data.showMistakes;
+    solverMode = data.solverMode === 'auto' ? 'auto' : 'self';
+    if (solverMode === 'auto') { store.killer.phase = 'setup'; store.normal.phase = 'setup'; }
+  } catch (err) { /* ignore broken save */ }
+}
+
+/* ---------- chrome (buttons, panels) ---------- */
+function updateChrome() {
+  const normal = mode === 'normal';
+  $('normalModeBtn').classList.toggle('active', normal);
+  $('killerModeBtn').classList.toggle('active', !normal);
+  $('setupBtn').textContent = normal ? 'Enter clues' : 'Build cages';
+  $('setupBtn').classList.toggle('active', !inPlay());
+  $('playBtn').classList.toggle('active', inPlay());
+
+  const killerSetup = !normal && !inPlay();
+  $('numberPad').hidden = killerSetup;
+  $('cageManager').hidden = !(!normal && !inPlay());
+  $('cageHint').hidden = !killerSetup;
+
+  if (editingGivens()) {
+    $('padTitle').textContent = 'Enter clues';
+    $('padHint').textContent = 'Select a cell, then pick a digit (or type 1-9). Press Play when the clues are in.';
+    $('modeHint').textContent = 'Enter the given numbers, then press Play and solve it yourself.';
+  } else if (inPlay()) {
+    $('padTitle').textContent = 'Play';
+    $('padHint').textContent = 'Type 1-9 to fill a cell. Turn Pencil on (or press N) to write candidates.';
+    $('modeHint').textContent = solverMode === 'auto'
+      ? 'Auto-solve is on: press "Solve for me", or still fill cells yourself.'
+      : 'You solve it. When every cell is filled correctly, you will know.';
+  } else {
+    $('modeHint').textContent = 'Drag across cells to form cages and enter their totals, then press Play.';
+  }
+  const auto = solverMode === 'auto';
+  $('draftBtn').classList.toggle('active', !auto);
+  $('solverBtn').classList.toggle('active', auto);
+  $('whoNote').textContent = auto
+    ? 'The program solves the puzzle for you. Enter it (or load an image), then press Solve.'
+    : 'You fill it in yourself: pencil marks, erase, undo. Confetti and a sound when it is correct.';
+  $('phaseSeg').hidden = auto;
+  $('solveBtn').hidden = !auto;
+  $('imageTool').hidden = inPlay();
+  if (auto) {
+    $('modeHint').textContent = normal
+      ? 'Enter the given numbers, then press Solve.'
+      : 'Drag across cells to form cages and enter their totals, then press Solve.';
+    if (editingGivens()) $('padHint').textContent = 'Select a cell, then pick a digit (or type 1-9). Press Solve when the clues are in.';
+  }
+  $('pencilBtn').classList.toggle('on', pencil);
+  $('pencilBtn').setAttribute('aria-pressed', String(pencil));
+  $('soundBtn').textContent = soundOn ? 'Sound: on' : 'Sound: off';
+  $('soundBtn').setAttribute('aria-pressed', String(soundOn));
+  $('mistakesChk').checked = showMistakes;
+  $('undoBtn').disabled = history.length === 0;
+  $('undoCageBtn').disabled = st.cages.length === 0;
+  $('clearBtn').hidden = editingGivens() || (!inPlay() && mode === 'killer');
+}
+
+/* ---------- render ---------- */
+function render(reveal = false) {
+  const bad = showMistakes ? conflicts() : new Set();
+  const selVal = sel ? value(sel[0], sel[1]) : 0;
+  boardEl.innerHTML = '';
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.style.setProperty('--d', ((r + c) * 45) + 'ms');
+      if (reveal) cell.classList.add('flash');
+
+      const cage = mode === 'killer' ? cageOf(r, c) : null;
+      if (cage) {
+        const same = (a, b) => cageOf(a, b) === cage;
+        if (!same(r - 1, c)) cell.classList.add('cb-t');
+        if (!same(r, c + 1)) cell.classList.add('cb-r');
+        if (!same(r + 1, c)) cell.classList.add('cb-b');
+        if (!same(r, c - 1)) cell.classList.add('cb-l');
+        cell.style.background = cageColors[cage.colorIndex % cageColors.length];
+      }
+      const selectedHere = isSelected(r, c);
+      if (selectedHere) cell.classList.add('selected');
+
+      const given = st.givens[r][c];
+      const v = given || st.vals[r][c];
+      if (selVal && v === selVal && !selectedHere) cell.classList.add('same');
+
+      if (v) {
+        const span = document.createElement('span');
+        span.className = 'value ' + (given ? 'given' : 'mine') + (bad.has(r * 9 + c) ? ' bad' : '');
+        span.textContent = v;
+        cell.appendChild(span);
+      } else if (st.notes[r][c]) {
+        const n = document.createElement('div');
+        n.className = 'notes' + (cage ? ' with-label' : '');
+        for (let d = 1; d <= 9; d++) {
+          const s = document.createElement('span');
+          s.textContent = st.notes[r][c] & (1 << d) ? d : '';
+          n.appendChild(s);
+        }
+        cell.appendChild(n);
+      }
+
+      if (cage) {
+        const first = cage.cells.reduce((best, x) => (x[0] < best[0] || (x[0] === best[0] && x[1] < best[1]) ? x : best), cage.cells[0]);
+        if (first[0] === r && first[1] === c) {
+          const label = document.createElement('span');
+          label.className = 'cage-label';
+          let shown = cage.total;
+          if (inPlay()) {
+            const filled = cage.cells.reduce((acc, [cr, cc]) => acc + value(cr, cc), 0);
+            shown = cage.total - filled;
+            if (shown < 0) label.classList.add('over');
+          }
+          label.textContent = shown;
+          cell.appendChild(label);
+        }
+      }
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+/* ---------- win ---------- */
+function celebrate() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const colors = ['#b8893b', '#e0bd76', '#16323a', '#8fb8a8', '#d9a3a8', '#9db4d6', '#e86a92', '#6ac4a0'];
+  for (let i = 0; i < 90; i++) {
+    const s = document.createElement('span');
+    s.className = 'confetti';
+    s.style.left = Math.random() * 100 + '%';
+    s.style.background = colors[i % colors.length];
+    s.style.width = 5 + Math.random() * 5 + 'px';
+    s.style.height = 9 + Math.random() * 8 + 'px';
+    s.style.animationDelay = Math.random() * 0.8 + 's';
+    s.style.animationDuration = 1.6 + Math.random() * 1.4 + 's';
+    stageEl.appendChild(s);
+    setTimeout(() => s.remove(), 3800);
+  }
+}
+
+function checkWin() {
+  const solved = inPlay() && isSolved();
+  if (solved && !solvedShown) {
+    solvedShown = true;
+    pauseTimer();
+    render(true);
+    setFavicon(true);
+    if (autoSolved) {
+      setStatus('Solved automatically.', 'success');
+    } else {
+      celebrate();
+      playFanfare();
+      setStatus('Solved! Well done!', 'success');
+    }
+    autoSolved = false;
+    save();
+  } else if (!solved && solvedShown) {
+    solvedShown = false;
+    setFavicon(false);
+    resumeTimer();
+    setStatus('');
+  }
+}
+
+function afterChange() {
+  render();
+  updateChrome();
+  save();
+  checkWin();
+}
+
+/* ---------- history ---------- */
+function pushHistory() {
+  history.push(JSON.stringify({ v: st.vals, n: st.notes }));
+  if (history.length > 300) history.shift();
+}
+function undo() {
+  if (!history.length || !inPlay()) return;
+  const snap = JSON.parse(history.pop());
+  st.vals = snap.v;
+  st.notes = snap.n;
+  afterChange();
+}
+
+/* ---------- input while playing ---------- */
+function isValidPlacement(grid, row, col, v) {
+  for (let i = 0; i < 9; i++) {
+    if (i !== col && grid[row][i] === v) return false;
+    if (i !== row && grid[i][col] === v) return false;
+  }
+  const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
+  for (let r = br; r < br + 3; r++) for (let c = bc; c < bc + 3; c++) if ((r !== row || c !== col) && grid[r][c] === v) return false;
+  return true;
+}
+
+function inputDigit(d) {
+  if (solving) return;
+  if (!sel) { setStatus('Select a cell first.', 'error'); return; }
+  const [r, c] = sel;
+  if (editingGivens()) {
+    if (!isValidPlacement(st.givens, r, c, d)) { setStatus('That digit conflicts with its row, column, or 3x3 box.', 'error'); return; }
+    dropSolution();
+    st.givens[r][c] = d;
+    let nr = r, nc = c + 1;
+    if (nc > 8) { nc = 0; nr = Math.min(8, r + 1); if (r === 8) nc = 8; }
+    sel = [nr, nc];
+    afterChange();
+    return;
+  }
+  if (!inPlay()) return;
+  if (st.givens[r][c]) { setStatus('That cell is a given clue.', 'error'); return; }
+  if (pencil) {
+    if (st.vals[r][c]) { setStatus('Erase the digit first to write candidates.', 'error'); return; }
+    pushHistory();
+    st.notes[r][c] ^= (1 << d);
+  } else {
+    if (st.vals[r][c] === d) return;
+    pushHistory();
+    st.vals[r][c] = d;
+    st.notes[r][c] = 0;
+  }
+  resumeTimer();
+  afterChange();
+}
+
+function eraseCell() {
+  if (solving) return;
+  if (!sel) { setStatus('Select a cell first.', 'error'); return; }
+  const [r, c] = sel;
+  if (editingGivens()) { dropSolution(); st.givens[r][c] = 0; afterChange(); return; }
+  if (!inPlay()) return;
+  if (st.givens[r][c]) { setStatus('That cell is a given clue.', 'error'); return; }
+  if (!st.vals[r][c] && !st.notes[r][c]) return;
+  pushHistory();
+  if (st.vals[r][c]) st.vals[r][c] = 0; else st.notes[r][c] = 0;
+  afterChange();
+}
+
+/* ---------- modes & phases ---------- */
+function switchMode(next) {
+  if (next === mode) return;
+  pauseTimer();
+  mode = next;
+  st = store[mode];
+  selectedCells = [];
+  history = [];
+  sel = (mode === 'normal' || inPlay()) ? [0, 0] : null;
+  solvedShown = inPlay() && isSolved();
+  setFavicon(solvedShown);
+  closeCageModal();
+  resumeTimer();
+  render(); renderCages(); updateChrome(); updateHint(); save();
+  setStatus(mode === 'normal' ? 'Normal Sudoku mode.' : 'Killer Sudoku mode.');
+}
+
+function setPhase(next) {
+  if (next === st.phase) return;
+  if (next === 'play') {
+    if (mode === 'killer') {
+      if (!st.cages.length) { setStatus('Add some cages first.', 'error'); return; }
+      const used = new Set();
+      let sum = 0;
+      st.cages.forEach((g) => { g.cells.forEach(([r, c]) => used.add(r * 9 + c)); sum += g.total; });
+      if (used.size < 81) { setStatus(`${81 - used.size} cells are not assigned to a cage yet.`, 'error'); return; }
+      if (sum !== 405) { setStatus(`Cage totals add up to ${sum}, but must add up to 405. Check the totals.`, 'error'); return; }
+    }
+  } else {
+    pauseTimer();
+  }
+  st.phase = next;
+  selectedCells = [];
+  history = [];
+  closeCageModal();
+  sel = (mode === 'normal' || inPlay()) ? (sel || [0, 0]) : null;
+  solvedShown = inPlay() && isSolved();
+  setFavicon(solvedShown);
+  resumeTimer();
+  render(); updateChrome(); updateHint(); save();
+  setStatus(next === 'play' ? 'Go! Fill the board yourself.' : '');
+}
+
+function clearEntries() {
+  if (!confirm('Clear all digits and pencil marks you entered?')) return;
+  st.vals = mk();
+  st.notes = mk();
+  st.elapsed = 0;
+  timerStart = null;
+  history = [];
+  solvedShown = false;
+  setFavicon(false);
+  resumeTimer();
+  afterChange();
+  setStatus('Your entries were cleared.', 'success');
+}
+
+function resetAll() {
+  timerStart = null;
+  store[mode] = newState();
+  st = store[mode];
+  selectedCells = [];
+  sel = mode === 'normal' ? [0, 0] : null;
+  history = [];
+  solvedShown = false;
+  setFavicon(false);
+  render(); renderCages(); updateChrome(); updateHint(); save();
+  setStatus('Board reset.', 'success');
+}
+
+/* ---------- cage building (Killer, setup phase) ---------- */
+const totalRange = (n) => ({ min: (n * (n + 1)) / 2, max: (n * (19 - n)) / 2 });
+
+function validateCage(cells, total) {
+  const n = cells.length;
+  if (!n) return 'Select some cells first.';
+  if (n > 9) return `A cage can have at most 9 cells (you selected ${n}).`;
+  if (!Number.isInteger(total)) return 'Enter a valid total.';
+  const { min, max } = totalRange(n);
+  if (total < min || total > max) return `${n} cell${n > 1 ? 's' : ''} can only add up to ${min}-${max}, not ${total}.`;
+  return '';
+}
+
+function updateHint() {
+  const hint = $('cageHint');
+  if (mode !== 'killer' || inPlay()) return;
+  const n = selectedCells.length;
+  if (!n) { hint.textContent = 'Press and drag across cells to select them. Drag over selected cells to unselect.'; return; }
+  if (n > 9) { hint.textContent = `${n} cells selected. A cage can have at most 9.`; return; }
+  const { min, max } = totalRange(n);
+  hint.textContent = `${n} cell${n > 1 ? 's' : ''} selected. Possible total: ${min}-${max}.`;
+}
+
+let dragging = false;
+let dragAdd = true;
+function cellFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  const cell = el && el.closest ? el.closest('.cell') : null;
+  return cell && boardEl.contains(cell) ? cell : null;
+}
+function applyDrag(cellEl) {
+  const row = Number(cellEl.dataset.row), col = Number(cellEl.dataset.col);
+  if (cageOf(row, col)) return;
+  const selected = selectedCells.some(([r, c]) => r === row && c === col);
+  if (dragAdd && !selected) { selectedCells.push([row, col]); cellEl.classList.add('selected'); }
+  else if (!dragAdd && selected) { selectedCells = selectedCells.filter(([r, c]) => !(r === row && c === col)); cellEl.classList.remove('selected'); }
+  updateHint();
+}
+
+boardEl.addEventListener('pointerdown', (event) => {
+  if (solving || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  const cellEl = cellFromPoint(event.clientX, event.clientY);
+  if (!cellEl) return;
+  const row = Number(cellEl.dataset.row), col = Number(cellEl.dataset.col);
+
+  if (mode === 'killer' && !inPlay()) {
+    if (cageOf(row, col)) { setStatus('This cell already belongs to a cage.', 'error'); return; }
+    event.preventDefault();
+    dragging = true;
+    dragAdd = !selectedCells.some(([r, c]) => r === row && c === col);
+    applyDrag(cellEl);
+    return;
+  }
+  sel = [row, col];
+  render();
 });
+window.addEventListener('pointermove', (event) => {
+  if (!dragging) return;
+  const cellEl = cellFromPoint(event.clientX, event.clientY);
+  if (cellEl) applyDrag(cellEl);
+});
+const endDrag = () => {
+  const was = dragging;
+  dragging = false;
+  if (was && mode === 'killer' && !inPlay() && selectedCells.length) openCageModal();
+};
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
+
+function openCageModal(editIndex = -1) {
+  const editing = Number.isInteger(editIndex) && editIndex >= 0 && st.cages[editIndex];
+  const n = editing ? st.cages[editIndex].cells.length : selectedCells.length;
+  if (!n) return;
+  editingCageIndex = editing ? editIndex : -1;
+  $('modalTitle').textContent = editing ? `Edit cage ${editIndex + 1} total` : 'Cage total';
+  const { min, max } = n <= 9 ? totalRange(n) : { min: 0, max: 0 };
+  modalInfoEl.textContent = n > 9
+    ? `${n} cells selected. A cage can have at most 9.`
+    : `${n} cell${n > 1 ? 's' : ''}${editing ? ' in this cage' : ' selected'}. Possible total: ${min}-${max}.`;
+  modalErrorEl.textContent = '';
+  cageTotalInput.min = min || 1;
+  cageTotalInput.max = max || 45;
+  cageTotalInput.value = editing ? st.cages[editIndex].total : '';
+  cageModalEl.hidden = false;
+  cageTotalInput.focus();
+  cageTotalInput.select();
+}
+function closeCageModal() {
+  cageModalEl.hidden = true;
+  modalErrorEl.textContent = '';
+  editingCageIndex = -1;
+}
+
+function renderCages() {
+  cageListEl.innerHTML = '';
+  st.cages.forEach((cage, index) => {
+    const item = document.createElement('div');
+    item.className = 'cage-item';
+    item.style.background = cageColors[cage.colorIndex % cageColors.length];
+    const desc = document.createElement('span');
+    desc.className = 'cage-description';
+    desc.textContent = `Cage ${index + 1}: ${cage.cells.map(([r, c]) => `(${r + 1},${c + 1})`).join(' ')} | Total: ${cage.total}`;
+    const edit = document.createElement('button');
+    edit.type = 'button'; edit.textContent = 'Edit';
+    edit.addEventListener('click', () => openCageModal(index));
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'cage-delete'; del.textContent = 'Delete';
+    del.addEventListener('click', () => deleteCage(index));
+    const actions = document.createElement('div');
+    actions.className = 'cage-actions';
+    actions.append(edit, del);
+    item.append(desc, actions);
+    cageListEl.appendChild(item);
+  });
+  $('undoCageBtn').disabled = st.cages.length === 0;
+}
+
+function deleteCage(index) {
+  if (!st.cages[index]) return;
+  dropSolution();
+  st.cages.splice(index, 1);
+  render(); renderCages(); save();
+  setStatus(`Cage ${index + 1} deleted.`, 'success');
+}
+function undoLastCage() {
+  if (!st.cages.length) return;
+  dropSolution();
+  const removed = st.cages.pop();
+  render(); renderCages(); save();
+  setStatus(`Last cage removed (total ${removed.total}).`, 'success');
+}
+
+function saveCurrentCage() {
+  const raw = cageTotalInput.value.trim();
+  const total = Number(raw);
+  if (editingCageIndex >= 0 && st.cages[editingCageIndex]) {
+    const cage = st.cages[editingCageIndex];
+    const problem = raw === '' ? 'Enter a total.' : validateCage(cage.cells, total);
+    if (problem) { modalErrorEl.textContent = problem; return; }
+    dropSolution();
+    cage.total = total;
+    const number = editingCageIndex + 1;
+    closeCageModal();
+    render(); renderCages(); save();
+    setStatus(`Cage ${number} total changed to ${total}.`, 'success');
+    return;
+  }
+  if (!selectedCells.length) { setStatus('Select some cells first.', 'error'); return; }
+  const problem = raw === '' ? 'Enter a total.' : validateCage(selectedCells, total);
+  if (problem) { modalErrorEl.textContent = problem; return; }
+  if (selectedCells.some(([r, c]) => cageOf(r, c))) { modalErrorEl.textContent = 'Some selected cells already belong to a cage.'; return; }
+  dropSolution();
+  st.cages.push({ cells: [...selectedCells], total, colorIndex: st.cages.length % cageColors.length });
+  selectedCells = [];
+  closeCageModal();
+  render(); renderCages(); updateHint(); save();
+  setStatus(`Cage saved: ${total}`, 'success');
+}
+
+/* ---------- auto-solver (used only when "Auto-solve" is chosen) ---------- */
+let solverCages = [];
+function cloneBoard(g) { return g.map((r) => [...r]); }
+function generateUniqueCombinations(size, total) {
+  const results = [];
+  function backtrack(start, remaining, current) {
+    if (current.length === size) { if (remaining === 0) results.push([...current]); return; }
+    for (let d = start; d <= 9; d++) {
+      if (d > remaining) break;
+      current.push(d);
+      backtrack(d + 1, remaining - d, current);
+      current.pop();
+    }
+  }
+  backtrack(1, total, []);
+  return results;
+}
+function permute(arr) {
+  const results = [];
+  function bt(current, remaining) {
+    if (!remaining.length) { results.push([...current]); return; }
+    for (let i = 0; i < remaining.length; i++) {
+      const next = [...remaining];
+      const v = next.splice(i, 1)[0];
+      current.push(v); bt(current, next); current.pop();
+    }
+  }
+  bt([], [...arr]);
+  return results;
+}
+function getSolverCage(r, c) { return solverCages.find((g) => g.cells.some(([a, b]) => a === r && b === c)); }
+function cageIsCompatible(grid, cage, row, col, v) {
+  const next = cloneBoard(grid);
+  next[row][col] = v;
+  const cells = cage.cells;
+  const filled = cells.map(([r, c]) => next[r][c]).filter((x) => x !== 0);
+  if (filled.length < cells.length) return true;
+  if (filled.reduce((a, x) => a + x, 0) !== cage.total) return false;
+  for (const combo of generateUniqueCombinations(cells.length, cage.total)) {
+    for (const perm of permute(combo)) {
+      let ok = true;
+      for (let i = 0; i < cells.length; i++) {
+        const [r, c] = cells[i];
+        if (next[r][c] !== 0 && next[r][c] !== perm[i]) { ok = false; break; }
+      }
+      if (ok) return true;
+    }
+  }
+  return false;
+}
+function findEmptyCell(grid) {
+  let best = null;
+  for (let row = 0; row < 9; row++) {
+    for (let col = 0; col < 9; col++) {
+      if (grid[row][col] !== 0) continue;
+      const candidates = [];
+      const cage = getSolverCage(row, col);
+      for (let v = 1; v <= 9; v++) {
+        if (!isValidPlacement(grid, row, col, v)) continue;
+        if (cage && !cageIsCompatible(grid, cage, row, col, v)) continue;
+        candidates.push(v);
+      }
+      if (!best || candidates.length < best.candidates.length) best = { row, col, candidates };
+      if (candidates.length <= 1) return best;
+    }
+  }
+  return best;
+}
+function solveKillerSudoku(grid) {
+  const next = findEmptyCell(grid);
+  if (!next) return true;
+  if (!next.candidates.length) return false;
+  const { row, col, candidates } = next;
+  for (const v of candidates) {
+    grid[row][col] = v;
+    if (solveKillerSudoku(grid)) return true;
+    grid[row][col] = 0;
+  }
+  return false;
+}
+function workerSource() {
+  const fns = [cloneBoard, generateUniqueCombinations, permute, isValidPlacement, cageIsCompatible, findEmptyCell, solveKillerSudoku, getSolverCage]
+    .map((f) => f.toString()).join('\n');
+  return `let solverCages = [];\n${fns}\nonmessage = (e) => { solverCages = e.data.cages; const g = e.data.grid; postMessage(solveKillerSudoku(g) ? g : null); };`;
+}
+function runSolver(grid, cages) {
+  return new Promise((resolve) => {
+    const fallback = () => setTimeout(() => { solverCages = cages; resolve(solveKillerSudoku(grid) ? grid : null); }, 120);
+    let worker = null;
+    try { worker = new Worker(URL.createObjectURL(new Blob([workerSource()], { type: 'text/javascript' }))); } catch (err) { worker = null; }
+    if (!worker) return fallback();
+    worker.onmessage = (e) => { worker.terminate(); resolve(e.data); };
+    worker.onerror = () => { worker.terminate(); fallback(); };
+    worker.postMessage({ grid, cages });
+  });
+}
+function validateAllCellsAssigned() {
+  let missing = 0;
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) if (!cageOf(r, c)) missing++;
+  if (missing > 0) { setStatus(`${missing} cells are not assigned to a cage.`, 'error'); return false; }
+  return true;
+}
+
+/* Solver mode: removes a stale program solution when the puzzle is edited */
+function dropSolution() {
+  if (solverMode !== 'auto') return;
+  if (st.vals.some((row) => row.some(Boolean))) { st.vals = mk(); st.notes = mk(); }
+  st.autoFilled = false;
+  solvedShown = false;
+  setFavicon(false);
+}
+function clearAutoFill(state) {
+  if (state.autoFilled) { state.vals = mk(); state.notes = mk(); state.autoFilled = false; }
+}
+
+function startFlicker() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  flickerId = setInterval(() => {
+    boardEl.querySelectorAll('.cell').forEach((cell) => {
+      if (Math.random() > 0.35) return;
+      let v = cell.querySelector('.value');
+      if (!v) { v = document.createElement('span'); v.className = 'value ghost'; cell.appendChild(v); }
+      v.textContent = 1 + Math.floor(Math.random() * 9);
+      v.classList.remove('tick');
+      void v.offsetWidth;
+      v.classList.add('tick');
+    });
+  }, 110);
+}
+function setBusy(on, title = 'Solving puzzle', flicker = true) {
+  clearInterval(flickerId);
+  if (on && flicker) startFlicker();
+  solving = on;
+  thinkTitleEl.textContent = title;
+  boardEl.classList.toggle('solving', on);
+  thinkingEl.hidden = !on;
+  document.querySelectorAll('.app button').forEach((button) => { button.disabled = on; });
+  if (!on) updateChrome();
+}
+function startTimer() {
+  const t0 = Date.now();
+  timeEl.textContent = '0.0';
+  clearInterval(timerId);
+  timerId = setInterval(() => { timeEl.textContent = ((Date.now() - t0) / 1000).toFixed(1); }, 100);
+}
+
+function solveNow() {
+  if (solving || solverMode !== 'auto') return;
+  if (mode === 'killer') {
+    if (!st.cages.length) { setStatus('Add at least one cage first.', 'error'); return; }
+    if (!validateAllCellsAssigned()) return;
+  } else if (!st.givens.some((row) => row.some((v) => v !== 0))) {
+    setStatus('Enter at least one given number first.', 'error');
+    return;
+  }
+  selectedCells = [];
+  st.vals = mk(); st.notes = mk(); st.autoFilled = false;
+  render();
+  setFavicon('solving');
+  setBusy(true);
+  setStatus('Solving…');
+  startTimer();
+  runSolver(cloneBoard(st.givens), mode === 'killer' ? st.cages : []).then((result) => {
+    clearInterval(timerId);
+    setBusy(false);
+    if (!result) setFavicon('failed');
+    if (result) {
+      st.vals = result.map((row, r) => row.map((v, c) => (st.givens[r][c] ? 0 : v)));
+      st.autoFilled = true;
+      solvedShown = true;
+      render(true);
+      celebrate();
+      setFavicon(true);
+      setStatus('Sudoku solved.', 'success');
+      save();
+    } else {
+      render();
+      setStatus('No solution found for this configuration.', 'error');
+    }
+  });
+}
+
+function setSolverMode(next) {
+  if (solving || next === solverMode) return;
+  pauseTimer();
+  solverMode = next;
+  if (next === 'auto') {
+    store.killer.phase = 'setup';
+    store.normal.phase = 'setup';
+  } else {
+    clearAutoFill(store.killer);
+    clearAutoFill(store.normal);
+  }
+  history = [];
+  selectedCells = [];
+  solvedShown = false;
+  setFavicon(false);
+  sel = mode === 'normal' ? (sel || [0, 0]) : null;
+  render(); renderCages(); updateChrome(); updateHint(); save();
+  setStatus(next === 'auto' ? 'Solver mode: the program solves it.' : 'Draft mode: you solve it.');
+}
+
+/* ---------- image import (reads the puzzle in the browser, or with Claude) ---------- */
+const modelSelect = document.getElementById('visionModel');
+try {
+  apiKeyInput.value = localStorage.getItem('sudokuApiKey') || '';
+  const savedModel = localStorage.getItem('sudokuModel');
+  if (savedModel && Array.from(modelSelect.options).some((o) => o.value === savedModel)) modelSelect.value = savedModel;
+} catch (err) { /* storage unavailable */ }
+apiKeyInput.addEventListener('change', () => {
+  try { localStorage.setItem('sudokuApiKey', apiKeyInput.value.trim()); } catch (err) { /* ignore */ }
+});
+modelSelect.addEventListener('change', () => {
+  try { localStorage.setItem('sudokuModel', modelSelect.value); } catch (err) { /* ignore */ }
+});
+
+async function fileToJpegBase64(file) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(2, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+}
+
+function imagePrompt(mode) {
+  const finish = ' You may think step by step first. Then give the final answer as ONE JSON object inside <json></json> tags, with nothing after it.';
+  if (mode === 'normal') {
+    return 'This image shows a standard 9x9 Sudoku puzzle. Read the given digits only, not pencil marks or small candidate digits. '
+      + 'Go row by row, left to right, and be careful to tell apart 1/7, 3/8, 5/6, 6/8 and 4/9. '
+      + 'Final JSON shape: {"givens":[[9 numbers],[9 numbers],... 9 rows]} where rows go top to bottom and an empty cell is 0.'
+      + finish;
+  }
+  return 'This image shows a 9x9 Killer Sudoku puzzle. Cages are groups of cells outlined by dashed or thick lines; '
+    + 'each cage has a small sum number (it can have two digits) in its top-left cell. Some cells may also hold a large given digit. '
+    + 'Work out every cage as a list of cells [row,col], with rows and columns numbered 1-9 (row 1 is the top, column 1 is the left). '
+    + 'Every one of the 81 cells belongs to exactly one cage, and the cage totals add up to 405. '
+    + 'Final JSON shape: {"givens":[[9 numbers] x 9 rows, 0 for empty],"cages":[{"total":15,"cells":[[1,1],[1,2]]}]}. Include every cage.'
+    + finish;
+}
+
+function extractJson(text) {
+  const tagged = text.match(/<json>([\s\S]*?)<\/json>/i);
+  const src = tagged ? tagged[1] : text;
+  const start = src.indexOf('{');
+  const end = src.lastIndexOf('}');
+  if (start === -1 || end <= start) throw new Error('The answer did not contain data.');
+  return JSON.parse(src.slice(start, end + 1));
+}
+
+function normalizeGivens(raw) {
+  if (!Array.isArray(raw) || raw.length !== 9 || !raw.every((r) => Array.isArray(r) && r.length === 9)) return null;
+  return raw.map((r) => r.map((v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 9 ? n : 0; }));
+}
+
+function conflictCells(grid) {
+  const bad = [];
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const v = grid[r][c];
+      if (v && !isValidSudokuPlacement(grid, r, c, v)) bad.push(`(${r + 1},${c + 1})`);
+    }
+  }
+  return bad;
+}
+
+function givensConflict(grid) {
+  return conflictCells(grid).length > 0;
+}
+
+/* Checks what Claude returned; every problem is sent back so it can correct itself. */
+function checkImageData(data, mode) {
+  const problems = [];
+  if (mode === 'normal') {
+    const grid = normalizeGivens(data.givens);
+    if (!grid) return ['"givens" must be 9 rows of 9 numbers'];
+    const bad = conflictCells(grid);
+    if (bad.length) problems.push(`these given digits repeat in a row, column or box: ${bad.slice(0, 8).join(' ')}`);
+    return problems;
+  }
+  if (!Array.isArray(data.cages) || !data.cages.length) return ['no cages were returned'];
+  const used = new Set();
+  let sum = 0;
+  data.cages.forEach((item, index) => {
+    const cells = (Array.isArray(item.cells) ? item.cells : []).map(([r, c]) => [Number(r) - 1, Number(c) - 1]);
+    const total = Number(item.total);
+    const label = `cage ${index + 1} (total ${total})`;
+    if (cells.some(([r, c]) => !(r >= 0 && r < 9 && c >= 0 && c < 9))) { problems.push(`${label} has a cell outside the board`); return; }
+    const keys = cells.map(([r, c]) => `${r},${c}`);
+    if (new Set(keys).size !== keys.length || keys.some((k) => used.has(k))) { problems.push(`${label} overlaps another cage`); return; }
+    const problem = validateCage(cells, total);
+    if (problem) { problems.push(`${label}: ${problem}`); return; }
+    keys.forEach((k) => used.add(k));
+    sum += total;
+  });
+  const missing = [];
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) if (!used.has(`${r},${c}`)) missing.push(`(${r + 1},${c + 1})`);
+  if (missing.length) problems.push(`these cells are not in any cage: ${missing.slice(0, 10).join(' ')}${missing.length > 10 ? ' ...' : ''}`);
+  else if (sum !== 405) problems.push(`the cage totals add up to ${sum}, but they must add up to 405, so a total was misread`);
+  return problems;
+}
+
+async function callClaude(key, model, messages) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({ model, max_tokens: 8000, messages })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error((payload.error && payload.error.message) || `Request failed (${response.status}).`);
+  }
+  return (payload.content || []).filter((part) => part.type === 'text').map((part) => part.text).join('');
+}
+
+async function readWithClaude(file, key, model, mode) {
+  const data64 = await fileToJpegBase64(file);
+  const messages = [{
+    role: 'user',
+    content: [
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data64 } },
+      { type: 'text', text: imagePrompt(mode) }
+    ]
+  }];
+  let best = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const text = await callClaude(key, model, messages);
+    let parsed = null;
+    try { parsed = extractJson(text); } catch (err) { parsed = null; }
+    if (!parsed) {
+      if (attempt === 2) break;
+      messages.push(
+        { role: 'assistant', content: text },
+        { role: 'user', content: 'I could not find valid JSON in your answer. Reply again with the final JSON object inside <json></json> tags.' }
+      );
+      continue;
+    }
+    const problems = checkImageData(parsed, mode);
+    if (!best || problems.length < best.problems.length) best = { data: parsed, problems };
+    if (!problems.length || attempt === 2) break;
+    setStatus(`Double-checking the image (${problems.length} problem${problems.length > 1 ? 's' : ''} found)…`);
+    messages.push(
+      { role: 'assistant', content: text },
+      { role: 'user', content: `Please check your answer against the image again. Problems found: ${problems.slice(0, 8).join('; ')}. Look carefully at the image and reply with the full corrected result in the same format (final JSON inside <json></json> tags).` }
+    );
+  }
+  if (!best) throw new Error('The answer did not contain data.');
+  return best;
+}
+
+function applyImageResult(data, opts = {}) {
+  dropSolution();
+  setFavicon(false);
+  const grid = normalizeGivens(data.givens);
+
+  if (mode === 'normal') {
+    if (!grid) throw new Error('Could not read the 9x9 grid from the image.');
+    const bad = conflictCells(grid);
+    if (bad.length && !opts.allowConflict) {
+      throw new Error(`The numbers read from the image conflict with each other (${bad.slice(0, 4).join(' ')}). Try a clearer image.`);
+    }
+    st.givens = grid; st.vals = mk(); st.notes = mk();
+    sel = [0, 0];
+    renderBoard();
+    const count = grid.flat().filter(Boolean).length;
+    const notes = [];
+    if (bad.length) notes.push(`these cells conflict: ${bad.slice(0, 4).join(' ')}`);
+    if (opts.uncertain && opts.uncertain.length) notes.push(`not sure about (row,col): ${opts.uncertain.slice(0, 6).map(([r, c]) => `(${r},${c})`).join(' ')}`);
+    if (notes.length) setStatus(`Filled ${count} numbers, but ${notes.join('; ')}. Fix them by hand (click a cell, type a digit), then press Solve.`, 'error');
+    else setStatus(`Filled ${count} given numbers from the image. Check them, then press Solve.`, 'success');
+    return;
+  }
+
+  const warnings = [];
+  const used = new Set();
+  const loaded = [];
+  (Array.isArray(data.cages) ? data.cages : []).forEach((item, index) => {
+    const cells = (Array.isArray(item.cells) ? item.cells : []).map(([r, c]) => [Number(r) - 1, Number(c) - 1]);
+    const total = Number(item.total);
+    const outside = cells.some(([r, c]) => !(r >= 0 && r < 9 && c >= 0 && c < 9));
+    const keys = cells.map(([r, c]) => `${r},${c}`);
+    if (outside) { warnings.push(`cage ${index + 1} was outside the board`); return; }
+    if (keys.some((k) => used.has(k)) || new Set(keys).size !== keys.length) { warnings.push(`cage ${index + 1} overlapped another cage`); return; }
+    const problem = validateCage(cells, total);
+    if (problem) { warnings.push(`cage ${index + 1}: ${problem}`); return; }
+    keys.forEach((k) => used.add(k));
+    loaded.push({ cells, total, colorIndex: loaded.length % cageColors.length });
+  });
+
+  if (!loaded.length) throw new Error('No cages could be read from the image.');
+
+  st.cages = loaded;
+  selectedCells = [];
+  if (grid && !givensConflict(grid)) st.givens = grid;
+  renderBoard();
+  renderCages();
+  updateHint();
+
+  const sum = loaded.reduce((acc, cage) => acc + cage.total, 0);
+  const missing = 81 - used.size;
+  if (missing === 0 && sum === 405 && !warnings.length) {
+    setStatus(`Loaded ${loaded.length} cages (totals add up to 405). Press Solve.`, 'success');
+  } else {
+    const notes = [];
+    if (missing) notes.push(`${missing} cells have no cage`);
+    if (missing === 0 && sum !== 405) notes.push(`totals add up to ${sum}, not 405, so a number was likely misread`);
+    notes.push(...warnings.slice(0, 2));
+    setStatus(`Loaded ${loaded.length} cages, but ${notes.join('; ')}. Fix them by hand (Edit / Delete in the cage list, or drag new cages).`, 'error');
+  }
+}
+
+/* LOCAL-READER-START: reads Killer and Normal Sudoku screenshots in the browser (no API key) */
+const DIGIT_TEMPLATES = {'0':'0000000999944000000000099994400000000992200990000000099220099000000228800007700000022880000770000005544000099000000554400009900000099220000990000009922000099000000990000228800000099000022880000007722007722000000772200772200000000999922000000000099992200000','1':'0000000044880000000000004488000000000088995500000000008899550000000099446633000000009944663300000000000099000000000000009900000000000000880000000000000088000000000000447700000000000044770000000000006633000000000000663300000000000099110000000000009911000000','2':'0000022999955000000002299995500000000990000880000000099000088000000000000008800000000000000880000000000006699000000000000669900000000006699330000000000669933000000006699330000000000669933000000001199330000000000119933000000000088999999550000008899999955000','3':'0000000999944000000000099994400000000990000990000000099000099000000000000009900000000000000990000000000339944000000000033994400000000000055440000000000005544000000000000226600000000000022660000009900007744000000990000774400000000999966000000000099996600000','4':'0000000005599000000000000559900000000000099990000000000009999000000000099886600000000009988660000000099004444000000009900444400000055440077220000005544007722000000999999999900000099999999990000000000008800000000000000880000000000002244000000000000224400000','5':'0000033999999000000003399999900000000779999990000000077999999000000009900000000000000990000000000000099999922000000009999992200000033550011770000003355001177000000000000117700000000000011770000009900005533000000990000553300000011999955000000001199995500000','6':'0000000999966000000000099996600000000772200990000000077220099000000009900000000000000990000000000005599999900000000559999990000000055880000880000005588000088000000554400008800000055440000880000002244005544000000224400554400000000779966000000000077996600000','7':'0002244445666000000224444566600000044444456440000004446777522000000000244640000000000024464000000000002662000000000000255200000000000026620000000001112551000000000446422100000000044642210000000004486110000000000449600000000000066740000000000006674000000000','8':'0000000999944000000000099994400000000990000990000000099000099000000009900009900000000990000990000000022998800000000002299880000000055440022660000005544002266000000990000226600000099000022660000007722007744000000772200774400000000999966000000000099996600000','9':'0000000999922000000000099992200000000990000990000000099000099000000226600009900000022660000990000002266000099000000226600009900000000779999990000000077999999000000000000448800000000000044880000009922009922000000992200992200000000999922000000000099992200000'};
+const GLYPH_N = 16;
+let digitTemplateCache = null;
+let fontTemplateCache = null;
+
+function getDigitTemplates() {
+  if (!digitTemplateCache) {
+    digitTemplateCache = {};
+    Object.keys(DIGIT_TEMPLATES).forEach((d) => {
+      digitTemplateCache[d] = Array.from(DIGIT_TEMPLATES[d], (ch) => Number(ch) / 9);
+    });
+  }
+  return digitTemplateCache;
+}
+
+function areaResample(src, h, w, oh, ow) {
+  const out = new Float64Array(oh * ow);
+  for (let i = 0; i < oh; i++) {
+    const y0 = (i * h) / oh;
+    const y1 = ((i + 1) * h) / oh;
+    for (let j = 0; j < ow; j++) {
+      const x0 = (j * w) / ow;
+      const x1 = ((j + 1) * w) / ow;
+      let tot = 0;
+      let wt = 0;
+      for (let yy = Math.floor(y0); yy < Math.ceil(y1); yy++) {
+        const wy = Math.min(y1, yy + 1) - Math.max(y0, yy);
+        if (wy <= 0) continue;
+        for (let xx = Math.floor(x0); xx < Math.ceil(x1); xx++) {
+          const wx = Math.min(x1, xx + 1) - Math.max(x0, xx);
+          if (wx <= 0) continue;
+          tot += src[yy * w + xx] * wy * wx;
+          wt += wy * wx;
+        }
+      }
+      out[i * ow + j] = wt ? tot / wt : 0;
+    }
+  }
+  return out;
+}
+
+/* a glyph (soft ink values 0..1, already cropped) -> 16x16 vector, aspect ratio kept, centred */
+function glyphFromSoft(sub, gh, gw) {
+  const wn = Math.max(1, Math.min(GLYPH_N, Math.round((gw * GLYPH_N) / gh)));
+  const norm = areaResample(sub, gh, gw, GLYPH_N, wn);
+  const canvas = new Float64Array(GLYPH_N * GLYPH_N);
+  const off = Math.floor((GLYPH_N - wn) / 2);
+  for (let y = 0; y < GLYPH_N; y++) for (let x = 0; x < wn; x++) canvas[y * GLYPH_N + off + x] = norm[y * wn + x];
+  return canvas;
+}
+
+function connectedComponents(mask, w, h) {
+  const seen = new Uint8Array(w * h);
+  const comps = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!mask[y * w + x] || seen[y * w + x]) continue;
+      const stack = [[y, x]];
+      seen[y * w + x] = 1;
+      const pts = [];
+      while (stack.length) {
+        const [cy, cx] = stack.pop();
+        pts.push([cy, cx]);
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const ny = cy + dy;
+            const nx = cx + dx;
+            if (ny < 0 || nx < 0 || ny >= h || nx >= w) continue;
+            if (!mask[ny * w + nx] || seen[ny * w + nx]) continue;
+            seen[ny * w + nx] = 1;
+            stack.push([ny, nx]);
+          }
+        }
+      }
+      comps.push(pts);
+    }
+  }
+  return comps;
+}
+
+function boundsOf(pts) {
+  let minY = Infinity; let maxY = -Infinity; let minX = Infinity; let maxX = -Infinity;
+  for (const [y, x] of pts) {
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+  }
+  return { minY, maxY, minX, maxX };
+}
+
+/* ----- Killer: cage totals (coloured digits in the top-left of a cage) ----- */
+function readRedDigits(img, x0, y0, cw, chh, mode) {
+  const { data, width: W } = img;
+  const rx = x0 + 1;
+  const ry = y0 + 1;
+  const rw = Math.floor(cw * 0.7) - 1;
+  const rh = Math.floor(chh * 0.45) - 1;
+  if (rw < 3 || rh < 3) return null;
+
+  const soft = new Float64Array(rw * rh);
+  const mask = new Uint8Array(rw * rh);
+  for (let y = 0; y < rh; y++) {
+    for (let x = 0; x < rw; x++) {
+      const p = ((ry + y) * W + (rx + x)) * 4;
+      const r = data[p];
+      const g = data[p + 1];
+      const b = data[p + 2];
+      const raw = mode === 'red' ? r - Math.max(g, b) : Math.max(r, g, b) - Math.min(r, g, b);
+      const v = Math.min(1, Math.max(0, (raw - 40) / 160));
+      soft[y * rw + x] = v;
+      mask[y * rw + x] = v > 0.3 ? 1 : 0;
+    }
+  }
+
+  let comps = connectedComponents(mask, rw, rh);
+  const heightOf = (pts) => { const b = boundsOf(pts); return b.maxY - b.minY + 1; };
+  comps = comps.filter((pts) => pts.length >= 4);
+  if (!comps.length) return null;
+  const tallest = Math.max(...comps.map(heightOf));
+  comps = comps.filter((pts) => heightOf(pts) >= Math.max(4, 0.6 * tallest));
+  comps.sort((a, b) => boundsOf(a).minX - boundsOf(b).minX);
+
+  const templates = getDigitTemplates();
+  let text = '';
+  for (const pts of comps) {
+    const { minY, maxY, minX, maxX } = boundsOf(pts);
+    const gh = maxY - minY + 1;
+    const gw = maxX - minX + 1;
+    const sub = new Float64Array(gh * gw);
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) sub[y * gw + x] = soft[(minY + y) * rw + (minX + x)];
+    const canvas = glyphFromSoft(sub, gh, gw);
+
+    let best = null;
+    let bestScore = Infinity;
+    for (const d of Object.keys(templates)) {
+      let score = 0;
+      const t = templates[d];
+      for (let i = 0; i < canvas.length; i++) { const diff = canvas[i] - t[i]; score += diff * diff; }
+      if (score < bestScore) { bestScore = score; best = d; }
+    }
+    text += best;
+  }
+  return text;
+}
+
+/* ----- grid location (works with margins, other UI around it, light or dark lines) ----- */
+function lineGroups(run, maxRun, ratio) {
+  const groups = [];
+  for (let i = 0; i < run.length; i++) {
+    if (run[i] < ratio * maxRun) continue;
+    const last = groups[groups.length - 1];
+    if (last && i - last[last.length - 1] <= 1) last.push(i); else groups.push([i]);
+  }
+  return groups.map((g) => g.reduce((a, b) => a + b, 0) / g.length);
+}
+
+function evenSpacing(lines) {
+  const diffs = lines.slice(1).map((v, i) => v - lines[i]);
+  const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+  if (mean <= 0) return false;
+  const sd = Math.sqrt(diffs.reduce((a, d) => a + (d - mean) * (d - mean), 0) / diffs.length);
+  return sd <= 0.12 * mean;
+}
+
+function tenLines(lines, limit) {
+  if (lines.length === 10) return evenSpacing(lines) ? lines : null;
+  if (lines.length === 9) {
+    const diffs = lines.slice(1).map((v, i) => v - lines[i]).sort((a, b) => a - b);
+    const d = diffs[diffs.length >> 1];
+    const candidates = [];
+    if (lines[8] + d <= limit + 4) candidates.push([...lines, lines[8] + d]);
+    if (lines[0] - d >= -4) candidates.push([lines[0] - d, ...lines]);
+    return candidates.find(evenSpacing) || null;
+  }
+  if (lines.length > 10) {
+    let best = null;
+    let bestVar = Infinity;
+    for (let s = 0; s + 10 <= lines.length; s++) {
+      const win = lines.slice(s, s + 10);
+      const diffs = win.slice(1).map((v, i) => v - win[i]);
+      const mean = diffs.reduce((a, b) => a + b, 0) / 9;
+      const variance = diffs.reduce((a, d) => a + (d - mean) * (d - mean), 0) / 9;
+      if (variance < bestVar) { bestVar = variance; best = win; }
+    }
+    return best && evenSpacing(best) ? best : null;
+  }
+  return null;
+}
+
+function locateGrid(lum, W, H) {
+  for (const thr of [140, 170, 200, 100]) {
+    const rowRun = new Int32Array(H);
+    const colRun = new Int32Array(W);
+    let maxRow = 0;
+    let maxCol = 0;
+    for (let y = 0; y < H; y++) {
+      let run = 0; let miss = 0; let best = 0;
+      const base = y * W;
+      for (let x = 0; x < W; x++) {
+        if (lum[base + x] < thr) { run += 1 + miss; miss = 0; if (run > best) best = run; }
+        else if (run > 0) { miss++; if (miss > 1) { run = 0; miss = 0; } }
+      }
+      rowRun[y] = best;
+      if (best > maxRow) maxRow = best;
+    }
+    for (let x = 0; x < W; x++) {
+      let run = 0; let miss = 0; let best = 0;
+      for (let y = 0; y < H; y++) {
+        if (lum[y * W + x] < thr) { run += 1 + miss; miss = 0; if (run > best) best = run; }
+        else if (run > 0) { miss++; if (miss > 1) { run = 0; miss = 0; } }
+      }
+      colRun[x] = best;
+      if (best > maxCol) maxCol = best;
+    }
+    if (maxRow < 30 || maxCol < 30) continue;
+    for (const ratio of [0.8, 0.6]) {
+      const ys = tenLines(lineGroups(rowRun, maxRow, ratio), H);
+      const xs = tenLines(lineGroups(colRun, maxCol, ratio), W);
+      if (!xs || !ys) continue;
+      const cw = (xs[9] - xs[0]) / 9;
+      const ch = (ys[9] - ys[0]) / 9;
+      if (cw < 10 || ch < 10 || cw / ch < 0.8 || cw / ch > 1.25) continue;
+      return { xs: xs.map((v) => Math.round(v)), ys: ys.map((v) => Math.min(Math.round(v), H - 1)) };
+    }
+  }
+  throw new Error('Could not find the 9x9 grid in the image.');
+}
+
+function analyzeKillerImage(img) {
+  const { data, width: W, height: H } = img;
+  const lum = new Uint8Array(W * H);
+  const dark = new Uint8Array(W * H);
+  let redCount = 0;
+  for (let i = 0, p = 0; i < W * H; i++, p += 4) {
+    const r = data[p];
+    const g = data[p + 1];
+    const b = data[p + 2];
+    const l = Math.floor((r * 299 + g * 587 + b * 114) / 1000);
+    const isRed = r > 170 && g < 120 && b < 120;
+    const colored = isRed || Math.max(r, g, b) - Math.min(r, g, b) > 90;
+    lum[i] = colored ? 255 : l;
+    dark[i] = !colored && l < 140 ? 1 : 0;
+    if (isRed) redCount++;
+  }
+
+  const { xs, ys } = locateGrid(lum, W, H);
+  const mode = redCount > 40 ? 'red' : 'sat';
+
+  const cellW = (xs[9] - xs[0]) / 9;
+  const cellH = (ys[9] - ys[0]) / 9;
+  const scale = Math.min(cellW, cellH) / 55.7;
+  const dMin = Math.max(2, Math.round(2 * scale));
+  const dMax = Math.max(5, Math.round(5 * scale));
+  const trim = Math.max(4, Math.round(10 * scale));
+
+  function strength(getFrac) {
+    let best = 0;
+    for (let d = dMin; d <= dMax; d++) best = Math.max(best, getFrac(d), getFrac(-d));
+    return best;
+  }
+  const vBoundary = (r, li) => strength((d) => {
+    const x = xs[li] + d;
+    if (x < 0 || x >= W) return 0;
+    let count = 0;
+    const y0 = ys[r] + trim;
+    const y1 = ys[r + 1] - trim;
+    for (let y = y0; y < y1; y++) count += dark[y * W + x];
+    return y1 > y0 ? count / (y1 - y0) : 0;
+  }) > 0.25;
+  const hBoundary = (c, li) => strength((d) => {
+    const y = ys[li] + d;
+    if (y < 0 || y >= H) return 0;
+    let count = 0;
+    const x0 = xs[c] + trim;
+    const x1 = xs[c + 1] - trim;
+    for (let x = x0; x < x1; x++) count += dark[y * W + x];
+    return x1 > x0 ? count / (x1 - x0) : 0;
+  }) > 0.25;
+
+  const parent = Array.from({ length: 81 }, (_, i) => i);
+  const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  const union = (a, b) => { parent[find(a)] = find(b); };
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (c < 8 && !vBoundary(r, c + 1)) union(r * 9 + c, r * 9 + c + 1);
+      if (r < 8 && !hBoundary(c, r + 1)) union(r * 9 + c, (r + 1) * 9 + c);
+    }
+  }
+
+  const groups = new Map();
+  for (let i = 0; i < 81; i++) {
+    const key = find(i);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push([Math.floor(i / 9), i % 9]);
+  }
+
+  const warnings = [];
+  const cagesFound = [];
+  let sum = 0;
+  let covered = 0;
+  for (const cells of groups.values()) {
+    cells.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const labels = [];
+    for (const [r, c] of cells) {
+      const text = readRedDigits(img, xs[c], ys[r], xs[c + 1] - xs[c], ys[r + 1] - ys[r], mode);
+      if (text) labels.push({ r, c, text });
+    }
+    const first = cells[0];
+    if (!labels.length) { warnings.push(`no number found for the cage at (${first[0] + 1},${first[1] + 1})`); continue; }
+    if (labels.length > 1) warnings.push(`two numbers inside one cage near (${first[0] + 1},${first[1] + 1})`);
+    const total = Number(labels[0].text);
+    const problem = validateCage(cells, total);
+    if (problem) { warnings.push(`cage at (${first[0] + 1},${first[1] + 1}): ${problem}`); continue; }
+    sum += total;
+    covered += cells.length;
+    cagesFound.push({ total, cells: cells.map(([r, c]) => [r + 1, c + 1]) });
+  }
+
+  const clean = !warnings.length && covered === 81 && sum === 405;
+  return { cages: cagesFound, warnings, clean };
+}
+
+/* ----- Normal: given digits, matched against digits drawn with common fonts ----- */
+function getFontTemplates() {
+  if (fontTemplateCache) return fontTemplateCache;
+  const fonts = ['Arial', 'Helvetica', '"Helvetica Neue"', 'Verdana', 'Tahoma', '"Trebuchet MS"', '"Segoe UI"', 'Roboto',
+    'Georgia', '"Times New Roman"', '"Courier New"', 'system-ui', 'sans-serif', 'serif'];
+  const S = 96;
+  const cv = document.createElement('canvas');
+  cv.width = S;
+  cv.height = S;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const out = {};
+  for (let d = 1; d <= 9; d++) out[d] = [];
+  for (const font of fonts) {
+    for (const weight of [400, 700]) {
+      for (let d = 1; d <= 9; d++) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, S, S);
+        ctx.fillStyle = '#000';
+        ctx.font = `${weight} 64px ${font}, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(String(d), S / 2, S * 0.76);
+        const px = ctx.getImageData(0, 0, S, S).data;
+        const soft = new Float64Array(S * S);
+        let minY = S; let maxY = -1; let minX = S; let maxX = -1;
+        for (let y = 0; y < S; y++) {
+          for (let x = 0; x < S; x++) {
+            const p = (y * S + x) * 4;
+            const v = 1 - (px[p] * 299 + px[p + 1] * 587 + px[p + 2] * 114) / 255000;
+            soft[y * S + x] = v;
+            if (v > 0.3) {
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+            }
+          }
+        }
+        if (maxY < 0) continue;
+        const gh = maxY - minY + 1;
+        const gw = maxX - minX + 1;
+        const sub = new Float64Array(gh * gw);
+        for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) sub[y * gw + x] = soft[(minY + y) * S + (minX + x)];
+        out[d].push(glyphFromSoft(sub, gh, gw));
+      }
+    }
+  }
+  fontTemplateCache = out;
+  return out;
+}
+
+function readGivenDigit(lum, W, x0, y0, x1, y1) {
+  const cw = x1 - x0;
+  const chh = y1 - y0;
+  const inset = Math.max(2, Math.round(Math.min(cw, chh) * 0.12));
+  const rx = x0 + inset;
+  const ry = y0 + inset;
+  const rw = cw - 2 * inset;
+  const rh = chh - 2 * inset;
+  if (rw < 6 || rh < 6) return { digit: 0 };
+
+  const hist = new Uint32Array(256);
+  for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) hist[lum[(ry + y) * W + rx + x]]++;
+  let acc = 0;
+  let bg = 255;
+  for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= (rw * rh) / 2) { bg = i; break; } }
+
+  const soft = new Float64Array(rw * rh);
+  const mask = new Uint8Array(rw * rh);
+  for (let y = 0; y < rh; y++) {
+    for (let x = 0; x < rw; x++) {
+      const v = Math.min(1, Math.max(0, (Math.abs(lum[(ry + y) * W + rx + x] - bg) - 45) / 110));
+      soft[y * rw + x] = v;
+      mask[y * rw + x] = v > 0.35 ? 1 : 0;
+    }
+  }
+
+  const all = connectedComponents(mask, rw, rh);
+  const kept = [];
+  const dropped = new Uint8Array(rw * rh);
+  for (const pts of all) {
+    const b = boundsOf(pts);
+    const h = b.maxY - b.minY + 1;
+    const w = b.maxX - b.minX + 1;
+    const isLine = (h <= 4 && w >= 0.9 * rw) || (w <= 4 && h >= 0.9 * rh);
+    if (h < 0.3 * chh || pts.length < 10 || isLine) {
+      for (const [y, x] of pts) dropped[y * rw + x] = 1;
+    } else {
+      kept.push(pts);
+    }
+  }
+  if (!kept.length) return { digit: 0 };
+
+  const all2 = [].concat(...kept);
+  const { minY, maxY, minX, maxX } = boundsOf(all2);
+  const gh = maxY - minY + 1;
+  const gw = maxX - minX + 1;
+  const sub = new Float64Array(gh * gw);
+  for (let y = 0; y < gh; y++) {
+    for (let x = 0; x < gw; x++) {
+      const i = (minY + y) * rw + (minX + x);
+      sub[y * gw + x] = dropped[i] ? 0 : soft[i];
+    }
+  }
+  const glyph = glyphFromSoft(sub, gh, gw);
+
+  const templates = getFontTemplates();
+  const scores = [];
+  for (let d = 1; d <= 9; d++) {
+    let best = Infinity;
+    for (const t of templates[d]) {
+      let score = 0;
+      for (let i = 0; i < glyph.length; i++) { const diff = glyph[i] - t[i]; score += diff * diff; }
+      if (score < best) best = score;
+    }
+    scores.push({ digit: d, score: best });
+  }
+  scores.sort((a, b) => a.score - b.score);
+  return { digit: scores[0].digit, score: scores[0].score, margin: scores[1].score - scores[0].score };
+}
+
+const NORMAL_MAX_SCORE = 30;
+const NORMAL_MIN_MARGIN = 4;
+
+function analyzeNormalImage(img) {
+  const { data, width: W, height: H } = img;
+  const lum = new Uint8Array(W * H);
+  let sum = 0;
+  for (let i = 0, p = 0; i < W * H; i++, p += 4) {
+    const l = Math.floor((data[p] * 299 + data[p + 1] * 587 + data[p + 2] * 114) / 1000);
+    lum[i] = l;
+    sum += l;
+  }
+  const dim = sum / (W * H) < 110;
+  const lineLum = dim ? lum.map((v) => 255 - v) : lum;
+  const { xs, ys } = locateGrid(lineLum, W, H);
+
+  const grid = createEmptyBoard();
+  const uncertain = [];
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const res = readGivenDigit(lum, W, xs[c], ys[r], xs[c + 1], ys[r + 1]);
+      grid[r][c] = res.digit;
+      if (res.digit && (res.score > NORMAL_MAX_SCORE || res.margin < NORMAL_MIN_MARGIN)) uncertain.push([r + 1, c + 1]);
+    }
+  }
+  const count = grid.flat().filter(Boolean).length;
+  const conflict = givensConflict(grid);
+  return { grid, uncertain, conflict, count };
+}
+/* LOCAL-READER-END */
+
+async function imageDataFromFile(file) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+async function readKillerLocally(file) {
+  const result = analyzeKillerImage(await imageDataFromFile(file));
+  return { data: { givens: null, cages: result.cages }, clean: result.clean, usable: result.cages.length > 0 };
+}
+
+async function readNormalLocally(file) {
+  const result = analyzeNormalImage(await imageDataFromFile(file));
+  return {
+    data: { givens: result.grid },
+    uncertain: result.uncertain,
+    clean: result.count > 0 && !result.conflict && !result.uncertain.length,
+    usable: result.count > 0
+  };
+}
+
+async function handleImageFile(file) {
+  if (solving || !file) return;
+  if (inPlay()) { setStatus('Switch back to setup (Build cages / Enter clues) to load an image.', 'error'); return; }
+  if (!file.type.startsWith('image/')) { setStatus('Please choose an image file.', 'error'); return; }
+
+  const key = apiKeyInput.value.trim();
+  const model = modelSelect.value;
+  if (key) { try { localStorage.setItem('sudokuApiKey', key); } catch (err) { /* ignore */ } }
+
+  setBusy(true, 'Reading image', false);
+  setStatus('Reading the image…');
+  startTimer();
+  const stopBusy = () => { clearInterval(timerId); setBusy(false); };
+
+  try {
+    // Both puzzle types are read right here in the browser first, no key needed.
+    let local = null;
+    try {
+      local = mode === 'killer' ? await readKillerLocally(file) : await readNormalLocally(file);
+    } catch (err) {
+      local = null;
+    }
+    if (local && local.clean) {
+      stopBusy();
+      applyImageResult(local.data, local);
+      return;
+    }
+
+    if (!key) {
+      stopBusy();
+      if (local && local.usable) {
+        applyImageResult(local.data, { ...local, allowConflict: true });
+        return;
+      }
+      document.getElementById('imageTool').open = true;
+      throw new Error('Could not read this image in the browser. Add an API key (Fill from image) or enter the puzzle by hand.');
+    }
+
+    // The browser reading was not sure: let Claude read it and double-check its own answer.
+    setStatus('Asking Claude to read the image…');
+    let result;
+    try {
+      result = await readWithClaude(file, key, model, mode);
+    } catch (err) {
+      if (local && local.usable) {
+        stopBusy();
+        applyImageResult(local.data, { ...local, allowConflict: true });
+        return;
+      }
+      throw err;
+    }
+    stopBusy();
+    applyImageResult(result.data, { allowConflict: true });
+  } catch (err) {
+    stopBusy();
+    setStatus(`Image import failed: ${err.message}`, 'error');
+  } finally {
+    imageFileInput.value = '';
+  }
+}
+
+imageBtn.addEventListener('click', () => imageFileInput.click());
+imageFileInput.addEventListener('change', () => handleImageFile(imageFileInput.files[0]));
+
+document.addEventListener('paste', (event) => {
+  const items = Array.from((event.clipboardData && event.clipboardData.items) || []);
+  const item = items.find((i) => i.type.startsWith('image/'));
+  if (item) { event.preventDefault(); handleImageFile(item.getAsFile()); }
+});
+
+['dragenter', 'dragover'].forEach((name) => boardWrapEl.addEventListener(name, (event) => {
+  if (event.dataTransfer && Array.from(event.dataTransfer.types).includes('Files')) {
+    event.preventDefault();
+    boardWrapEl.classList.add('dropping');
+  }
+}));
+['dragleave', 'drop'].forEach((name) => boardWrapEl.addEventListener(name, () => boardWrapEl.classList.remove('dropping')));
+boardWrapEl.addEventListener('drop', (event) => {
+  if (!event.dataTransfer || !event.dataTransfer.files.length) return;
+  event.preventDefault();
+  handleImageFile(event.dataTransfer.files[0]);
+});
+
+/* ---------- wiring ---------- */
+$('normalModeBtn').addEventListener('click', () => switchMode('normal'));
+$('killerModeBtn').addEventListener('click', () => switchMode('killer'));
+$('draftBtn').addEventListener('click', () => setSolverMode('self'));
+$('solverBtn').addEventListener('click', () => setSolverMode('auto'));
+$('solveBtn').addEventListener('click', solveNow);
+$('setupBtn').addEventListener('click', () => setPhase('setup'));
+$('playBtn').addEventListener('click', () => setPhase('play'));
+document.querySelectorAll('.digit-key').forEach((b) => b.addEventListener('click', () => inputDigit(Number(b.dataset.digit))));
+$('eraseBtn').addEventListener('click', eraseCell);
+$('undoBtn').addEventListener('click', undo);
+$('pencilBtn').addEventListener('click', () => { pencil = !pencil; updateChrome(); });
+$('soundBtn').addEventListener('click', () => {
+  soundOn = !soundOn;
+  if (soundOn && ensureAudio()) { tone(880, 0, .18, 'sine', .15); tone(1318.5, .12, .25, 'sine', .15); }
+  updateChrome(); save();
+});
+$('mistakesChk').addEventListener('change', (e) => { showMistakes = e.target.checked; render(); save(); });
+$('clearBtn').addEventListener('click', clearEntries);
+$('resetBtn').addEventListener('click', resetAll);
+$('undoCageBtn').addEventListener('click', undoLastCage);
+$('saveCageBtn').addEventListener('click', saveCurrentCage);
+$('cancelCageBtn').addEventListener('click', closeCageModal);
+cageTotalInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveCurrentCage(); } });
+cageTotalInput.addEventListener('input', () => { modalErrorEl.textContent = ''; });
+cageModalEl.addEventListener('pointerdown', (e) => { if (e.target === cageModalEl) closeCageModal(); });
+
+document.addEventListener('keydown', (event) => {
+  if (!cageModalEl.hidden) { if (event.key === 'Escape') closeCageModal(); return; }
+  if (event.target.closest && event.target.closest('input, textarea, select')) return;
+  const canEdit = editingGivens() || inPlay();
+  if (!canEdit) return;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(); return; }
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+  const moves = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+  if (moves[event.key]) {
+    event.preventDefault();
+    const [r, c] = sel || [0, 0];
+    sel = [Math.min(8, Math.max(0, r + moves[event.key][0])), Math.min(8, Math.max(0, c + moves[event.key][1]))];
+    render();
+    return;
+  }
+  const m = /^(?:Digit|Numpad)([1-9])$/.exec(event.code || '');
+  if (m) {
+    event.preventDefault();
+    if (event.shiftKey && inPlay() && !pencil) {  // Shift+digit = quick pencil mark
+      pencil = true; inputDigit(Number(m[1])); pencil = false; updateChrome();
+    } else inputDigit(Number(m[1]));
+    return;
+  }
+  if (event.key === 'Backspace' || event.key === 'Delete' || event.key === '0') { event.preventDefault(); eraseCell(); return; }
+  if (event.key.toLowerCase() === 'n' || event.key.toLowerCase() === 'p') { pencil = !pencil; updateChrome(); }
+});
+
+/* ---------- cage total stepper (− / +, basıb saxlayanda təkrarlanır) ---------- */
+function stepTotal(delta) {
+  const min = Number(cageTotalInput.min) || 1;
+  const max = Number(cageTotalInput.max) || 45;
+  const raw = cageTotalInput.value.trim();
+  let v;
+  if (raw === '' || !Number.isFinite(Number(raw))) v = delta > 0 ? min : max;
+  else v = Math.min(max, Math.max(min, Math.round(Number(raw)) + delta));
+  cageTotalInput.value = v;
+  modalErrorEl.textContent = '';
+}
+function bindStepper(btn, delta) {
+  let delayId = null, repeatId = null;
+  const stop = () => { clearTimeout(delayId); clearInterval(repeatId); delayId = repeatId = null; };
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    stepTotal(delta);
+    stop();
+    delayId = setTimeout(() => { repeatId = setInterval(() => stepTotal(delta), 80); }, 380);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((n) => btn.addEventListener(n, stop));
+  btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); stepTotal(delta); } });
+}
+bindStepper($('totalMinus'), -1);
+bindStepper($('totalPlus'), 1);
+cageTotalInput.addEventListener('focus', () => cageTotalInput.select());
+
+/* ---------- start ---------- */
+load();
+sel = (mode === 'normal' || inPlay()) ? [0, 0] : null;
+solvedShown = inPlay() && isSolved();
+setFavicon(solvedShown);
+resumeTimer();
+render(); renderCages(); updateChrome(); updateHint();
 </script>
-<script src="script.js"></script>
 </body>
 </html>
