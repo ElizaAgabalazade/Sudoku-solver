@@ -423,10 +423,11 @@ h1 {
 .panel .seg { width: 100%; }
 .panel .seg button { flex: 1; }
 
+/* Reset solda, Sound sağda — panelin ən yuxarısında */
 .topline {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 10px;
 }
 
@@ -610,7 +611,7 @@ button.solve {
 .status.error { color: var(--danger); border-color: var(--danger); }
 .status.success { color: var(--ok); border-color: var(--ok); }
 
-/* ========== Modal (rahat, balanslı ölçülər) ========== */
+/* ========== Modal ========== */
 .modal {
   position: fixed;
   inset: 0;
