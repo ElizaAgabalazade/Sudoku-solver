@@ -1,36 +1,38 @@
 :root {
-  --bg1: #f1f4f6;
-  --bg2: #dce5eb;
-  --glow: rgba(224, 189, 118, .28);
+  /* classic: nanə + lavanda */
+  --bg1: #c7f2e6;
+  --bg2: #dccbf7;
+  --glow: rgba(155, 123, 224, .30);
   --panel: #ffffff;
-  --ink: #16323a;
-  --muted: #5d7580;
-  --hair: #d5dee4;
-  --cell: #fbfcfd;
-  --cell-ink: #16323a;
-  --line: #16323a;
-  --soft: rgba(22, 50, 58, .16);
-  --dash: rgba(22, 50, 58, .55);
-  --brass: #b8893b;
-  --brass2: #e0bd76;
-  --sel: #f6e7c1;
-  --mine: #2f6fb5;
-  --btn-bg: #16323a;
+  --ink: #26335f;
+  --muted: #62709a;
+  --hair: #d6def0;
+  --cell: #fbfdff;
+  --cell-ink: #26335f;
+  --line: #34447a;
+  --soft: rgba(38, 51, 95, .16);
+  --dash: rgba(38, 51, 95, .5);
+  --brass: #3fb5a0;
+  --brass2: #9b7be0;
+  --sel: #e4dcfb;
+  --mine: #5a45c4;
+  --btn-bg: #3fb5a0;
   --btn-ink: #ffffff;
-  --solve-ink: #2a1d06;
+  --solve-ink: #ffffff;
   --danger: #a1364d;
   --ok: #1f6b52;
-  --card-shadow: 0 30px 60px -28px rgba(22, 50, 58, .45), 0 2px 6px rgba(22, 50, 58, .08);
-  --cg0: #dcebe4;
-  --cg1: #f1dfe0;
-  --cg2: #dce6f2;
-  --cg3: #f3e9d3;
-  --cg4: #e6def0;
-  --cg5: #d6ebeb;
-  --cg6: #f3ddd1;
-  --cg7: #e4ebd3;
-  --cg8: #ecdfe8;
-  --cg9: #dfe3ee;
+  --veil: rgba(255, 255, 255, .6);
+  --card-shadow: 0 30px 60px -28px rgba(80, 70, 160, .4), 0 2px 6px rgba(80, 70, 160, .08);
+  --cg0: #d3f4ec;
+  --cg1: #e6dcfa;
+  --cg2: #d9ecfb;
+  --cg3: #fbe3ef;
+  --cg4: #e2f6d8;
+  --cg5: #fdf0d0;
+  --cg6: #d3f0f5;
+  --cg7: #f1dcf7;
+  --cg8: #dcf3e6;
+  --cg9: #fde0d6;
   --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
   --sans: 'Jost', 'Helvetica Neue', Arial, sans-serif;
   --cellsize: min(56px, 9.6vw);
@@ -40,176 +42,174 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ocean: mavi + yaşıl */
 :root[data-palette="ocean"] {
-  --bg1: #e0f2fe;
-  --bg2: #f8fafc;
-  --glow: rgba(96, 165, 250, .28);
+  --bg1: #c9ebfb;
+  --bg2: #c8f7dc;
+  --glow: rgba(63, 169, 216, .28);
   --panel: #ffffff;
-  --ink: #111827;
-  --muted: #64748b;
-  --hair: #d3dce6;
-  --cell: #f9fafb;
-  --cell-ink: #111827;
-  --line: #1f2937;
-  --soft: rgba(31, 41, 55, .18);
-  --dash: rgba(31, 41, 55, .55);
-  --brass: #2563eb;
-  --brass2: #60a5fa;
-  --sel: #bfdbfe;
-  --mine: #1d4ed8;
-  --btn-bg: #2563eb;
+  --ink: #12485a;
+  --muted: #527c8a;
+  --hair: #cfe6ee;
+  --cell: #fbfeff;
+  --cell-ink: #12485a;
+  --line: #1b5f78;
+  --soft: rgba(18, 72, 90, .16);
+  --dash: rgba(18, 72, 90, .5);
+  --brass: #3fa9d8;
+  --brass2: #3cc58d;
+  --sel: #d4f3e6;
+  --mine: #0e6fb0;
+  --btn-bg: #3fa9d8;
   --btn-ink: #ffffff;
   --solve-ink: #ffffff;
-  --card-shadow: 0 12px 30px rgba(15, 23, 42, .18);
-  --cg0: #e0f2fe;
-  --cg1: #fde8e8;
-  --cg2: #e0f2e9;
-  --cg3: #fef3c7;
-  --cg4: #ede9fe;
-  --cg5: #cffafe;
-  --cg6: #fce7f3;
-  --cg7: #ecfccb;
-  --cg8: #e0e7ff;
-  --cg9: #f1f5f9;
-  --serif: 'Jost', Arial, sans-serif;
+  --card-shadow: 0 30px 60px -28px rgba(20, 110, 140, .4), 0 2px 6px rgba(20, 110, 140, .08);
+  --cg0: #d7f0fb;
+  --cg1: #d9f8e6;
+  --cg2: #e4eefc;
+  --cg3: #e0f7f4;
+  --cg4: #f0f7d4;
+  --cg5: #d4e8fb;
+  --cg6: #d8f5e0;
+  --cg7: #e9f1ff;
+  --cg8: #dbf6f0;
+  --cg9: #fdf3d2;
 }
 
+/* sage: sarı + narıncı */
 :root[data-palette="sage"] {
-  --bg1: #eef2ea;
-  --bg2: #dde7d6;
-  --glow: rgba(169, 199, 154, .35);
-  --panel: #fbfdf9;
-  --ink: #26362b;
-  --muted: #667a6b;
-  --hair: #cfdbc8;
-  --cell: #fcfdfa;
-  --cell-ink: #26362b;
-  --line: #2f4a38;
-  --soft: rgba(38, 54, 43, .16);
-  --dash: rgba(38, 54, 43, .5);
-  --brass: #6b8f5a;
-  --brass2: #a9c79a;
-  --sel: #e3efc9;
-  --mine: #2f6a8c;
-  --btn-bg: #3f5f48;
+  --bg1: #fff6b8;
+  --bg2: #ffd9bd;
+  --glow: rgba(238, 139, 74, .28);
+  --panel: #fffefa;
+  --ink: #53360f;
+  --muted: #8a6d44;
+  --hair: #f1e3c0;
+  --cell: #fffefb;
+  --cell-ink: #53360f;
+  --line: #6b4716;
+  --soft: rgba(83, 54, 15, .16);
+  --dash: rgba(83, 54, 15, .5);
+  --brass: #e8b923;
+  --brass2: #ee8b4a;
+  --sel: #fff0a8;
+  --mine: #1f62a8;
+  --btn-bg: #e39a2e;
+  --btn-ink: #ffffff;
+  --solve-ink: #3a2200;
+  --card-shadow: 0 30px 60px -28px rgba(190, 120, 30, .4), 0 2px 6px rgba(190, 120, 30, .08);
+  --cg0: #fff5c4;
+  --cg1: #ffe2cc;
+  --cg2: #e8f5c9;
+  --cg3: #ffe9b8;
+  --cg4: #fde0d4;
+  --cg5: #f3f9cf;
+  --cg6: #ffeed6;
+  --cg7: #fbe6b5;
+  --cg8: #e9f6d3;
+  --cg9: #ffe0c2;
+}
+
+/* sepia: şaftalı + çəhrayı */
+:root[data-palette="sepia"] {
+  --bg1: #ffe0cc;
+  --bg2: #fbcfe3;
+  --glow: rgba(240, 138, 93, .30);
+  --panel: #fffdfc;
+  --ink: #55263f;
+  --muted: #8b6075;
+  --hair: #f1d8dc;
+  --cell: #fffefd;
+  --cell-ink: #55263f;
+  --line: #6d3350;
+  --soft: rgba(85, 38, 63, .16);
+  --dash: rgba(85, 38, 63, .5);
+  --brass: #f08a5d;
+  --brass2: #d9609a;
+  --sel: #ffe3c4;
+  --mine: #b0307a;
+  --btn-bg: #e0728a;
   --btn-ink: #ffffff;
   --solve-ink: #ffffff;
-  --card-shadow: 0 30px 60px -28px rgba(38, 54, 43, .4), 0 2px 6px rgba(38, 54, 43, .08);
-  --cg0: #dfeadb;
-  --cg1: #efe3dc;
-  --cg2: #dbe8ea;
-  --cg3: #f1ecd2;
-  --cg4: #e7e0ee;
-  --cg5: #d7e9e2;
-  --cg6: #f0dfd3;
-  --cg7: #e6ecd0;
-  --cg8: #ecdfe6;
-  --cg9: #dfe5e0;
+  --card-shadow: 0 30px 60px -28px rgba(180, 70, 100, .4), 0 2px 6px rgba(180, 70, 100, .08);
+  --cg0: #ffe4d3;
+  --cg1: #fbd9e8;
+  --cg2: #fff0c9;
+  --cg3: #f8dbf0;
+  --cg4: #ffe0e0;
+  --cg5: #e9f2d0;
+  --cg6: #fde7c7;
+  --cg7: #f6d3df;
+  --cg8: #d9eef2;
+  --cg9: #ead9f7;
 }
 
-:root[data-palette="sepia"] {
-  --bg1: #f6efe3;
-  --bg2: #eadfca;
-  --glow: rgba(217, 160, 102, .3);
-  --panel: #fffaf0;
-  --ink: #3b2f22;
-  --muted: #7d6b57;
-  --hair: #e0d3bb;
-  --cell: #fffcf5;
-  --cell-ink: #3b2f22;
-  --line: #4a3a28;
-  --soft: rgba(59, 47, 34, .17);
-  --dash: rgba(59, 47, 34, .5);
-  --brass: #a0622d;
-  --brass2: #d9a066;
-  --sel: #f8dfb0;
-  --mine: #1f5f8f;
-  --btn-bg: #4a3a28;
-  --btn-ink: #fffaf0;
-  --solve-ink: #2a1606;
-  --card-shadow: 0 30px 60px -28px rgba(74, 58, 40, .4), 0 2px 6px rgba(74, 58, 40, .08);
-  --cg0: #efe3cc;
-  --cg1: #f1dcd6;
-  --cg2: #dfe4d2;
-  --cg3: #f3e6c4;
-  --cg4: #e9dcd9;
-  --cg5: #d9e5df;
-  --cg6: #f0d9c2;
-  --cg7: #e7e6c9;
-  --cg8: #eddbe0;
-  --cg9: #e3ddcf;
-}
-
+/* midnight: bənövşəyi-mavi + çəhrayı */
 :root[data-palette="midnight"] {
-  --bg1: #0c171c;
-  --bg2: #14262d;
-  --glow: rgba(212, 166, 79, .12);
-  --panel: #16292f;
-  --ink: #e8eff1;
-  --muted: #93aab3;
-  --hair: #2b444d;
-  --cell: #1b3139;
-  --cell-ink: #e8eff1;
-  --line: #7f9ea8;
-  --soft: rgba(232, 239, 241, .16);
-  --dash: rgba(232, 239, 241, .5);
-  --brass: #d4a64f;
-  --brass2: #e8c97f;
-  --sel: #5a4a1c;
-  --mine: #7cc4ff;
-  --btn-bg: #e8eff1;
-  --btn-ink: #0c171c;
-  --solve-ink: #2a1d06;
-  --danger: #f08a9c;
-  --ok: #7fd1b0;
-  --card-shadow: 0 30px 60px -28px rgba(0, 0, 0, .8), 0 2px 6px rgba(0, 0, 0, .4);
-  --cg0: #244339;
-  --cg1: #43303a;
-  --cg2: #26394f;
-  --cg3: #463c24;
-  --cg4: #3a3050;
-  --cg5: #1f4647;
-  --cg6: #4a3428;
-  --cg7: #37412a;
-  --cg8: #432f3d;
-  --cg9: #2f3748;
-  color-scheme: dark;
+  --bg1: #d4dcff;
+  --bg2: #fbd3e8;
+  --glow: rgba(111, 123, 232, .28);
+  --panel: #ffffff;
+  --ink: #2d2868;
+  --muted: #6a679b;
+  --hair: #dcdcf3;
+  --cell: #fcfcff;
+  --cell-ink: #2d2868;
+  --line: #3d3790;
+  --soft: rgba(45, 40, 104, .16);
+  --dash: rgba(45, 40, 104, .5);
+  --brass: #6f7be8;
+  --brass2: #e66fae;
+  --sel: #e6e0fb;
+  --mine: #4a3fd0;
+  --btn-bg: #6f7be8;
+  --btn-ink: #ffffff;
+  --solve-ink: #ffffff;
+  --card-shadow: 0 30px 60px -28px rgba(90, 80, 200, .4), 0 2px 6px rgba(90, 80, 200, .08);
+  --cg0: #e0e5ff;
+  --cg1: #fbdcee;
+  --cg2: #e6e0fb;
+  --cg3: #d9ebfd;
+  --cg4: #fce4f1;
+  --cg5: #e3e8ff;
+  --cg6: #f3dffb;
+  --cg7: #d9f0fb;
+  --cg8: #fde3ea;
+  --cg9: #e9e4ff;
 }
 
+/* dusk: çəhrayı + nanə */
 :root[data-palette="dusk"] {
-  --bg1: #14131f;
-  --bg2: #1f1b33;
-  --glow: rgba(199, 146, 234, .14);
-  --panel: #1c1a2c;
-  --ink: #ece9f7;
-  --muted: #a29dc0;
-  --hair: #34304d;
-  --cell: #232038;
-  --cell-ink: #ece9f7;
-  --line: #8a84b8;
-  --soft: rgba(236, 233, 247, .15);
-  --dash: rgba(236, 233, 247, .5);
-  --brass: #c792ea;
-  --brass2: #e0b8f5;
-  --sel: #4a3a6b;
-  --mine: #8fd0ff;
-  --btn-bg: #c792ea;
-  --btn-ink: #1a1228;
-  --solve-ink: #1a1228;
-  --danger: #ff8fa3;
-  --ok: #86e0b8;
-  --card-shadow: 0 30px 60px -28px rgba(0, 0, 0, .85), 0 2px 6px rgba(0, 0, 0, .45);
-  --cg0: #2b3a52;
-  --cg1: #4a2f45;
-  --cg2: #2f4a4a;
-  --cg3: #4d4430;
-  --cg4: #3d3260;
-  --cg5: #2a4a5c;
-  --cg6: #523a38;
-  --cg7: #3c4a2e;
-  --cg8: #4a3350;
-  --cg9: #34384f;
-  color-scheme: dark;
+  --bg1: #ffd6ea;
+  --bg2: #c9f4e6;
+  --glow: rgba(238, 127, 183, .28);
+  --panel: #fffefe;
+  --ink: #552f5c;
+  --muted: #85648b;
+  --hair: #f0dbea;
+  --cell: #fffdff;
+  --cell-ink: #552f5c;
+  --line: #6d3f75;
+  --soft: rgba(85, 47, 92, .16);
+  --dash: rgba(85, 47, 92, .5);
+  --brass: #ee7fb7;
+  --brass2: #55c7a6;
+  --sel: #ffe0f0;
+  --mine: #8a3fc0;
+  --btn-bg: #e46aa9;
+  --btn-ink: #ffffff;
+  --solve-ink: #ffffff;
+  --card-shadow: 0 30px 60px -28px rgba(190, 80, 150, .4), 0 2px 6px rgba(190, 80, 150, .08);
+  --cg0: #ffe0ef;
+  --cg1: #d5f6ec;
+  --cg2: #f1e1fb;
+  --cg3: #fff0d2;
+  --cg4: #dff0fd;
+  --cg5: #fde0e0;
+  --cg6: #e5f8d8;
+  --cg7: #f9dff4;
+  --cg8: #d8f3f6;
+  --cg9: #fff5c9;
 }
 
 * { box-sizing: border-box; }
@@ -229,7 +229,7 @@ body {
 .app {
   width: min(100%, 1020px);
   padding: 34px 32px 36px;
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--panel) 90%, var(--brass2)));
   border: 1px solid var(--hair);
   border-radius: 28px;
   box-shadow: var(--card-shadow);
@@ -277,9 +277,9 @@ h1 {
 }
 
 .seg button.active {
-  color: var(--ink);
-  background: var(--panel);
-  border-color: var(--hair);
+  color: #fff;
+  background: linear-gradient(135deg, var(--brass), var(--brass2));
+  border-color: transparent;
   box-shadow: 0 2px 6px rgba(0, 0, 0, .12);
 }
 
@@ -423,7 +423,6 @@ h1 {
 .panel .seg { width: 100%; }
 .panel .seg button { flex: 1; }
 
-/* Reset solda, Sound sağda — panelin ən yuxarısında */
 .topline {
   display: flex;
   align-items: center;
@@ -499,6 +498,10 @@ button.solve {
   border-color: transparent;
   box-shadow: 0 10px 20px -12px var(--brass);
 }
+#saveCageBtn {
+  background: linear-gradient(135deg, var(--brass), var(--brass2));
+  border-color: transparent;
+}
 
 .number-pad,
 .cage-manager { display: flex; flex-direction: column; gap: 10px; }
@@ -530,6 +533,24 @@ button.solve {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+/* Pencil açıq olanda: sarı düymə */
+#pencilBtn.on {
+  background: linear-gradient(135deg, #ffd54a, #ffb347);
+  color: #3a2a00;
+  border-color: transparent;
+}
+
+/* Pencil açıq olanda: kursor qələm olur (yalnız rəqəm paneli görünəndə) */
+body:has(#numberPad:not([hidden]) #pencilBtn.on) .board,
+body:has(#numberPad:not([hidden]) #pencilBtn.on) .board .cell,
+body:has(#numberPad:not([hidden]) #pencilBtn.on) .digit-key {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M3 29l1.6-7L22 4.6a2.4 2.4 0 0 1 3.4 0l2 2a2.4 2.4 0 0 1 0 3.4L10 27.4z' fill='%23ffd54a' stroke='%232b2b2b' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M3 29l1.6-7 5.4 5.4z' fill='%23f3c9a0' stroke='%232b2b2b' stroke-width='1.4' stroke-linejoin='round'/%3E%3Cpath d='M20 7l5 5' stroke='%232b2b2b' stroke-width='1.4'/%3E%3C/svg%3E") 3 29, crosshair;
+}
+body:has(#numberPad:not([hidden]) #pencilBtn.on) .board {
+  outline: 3px dashed var(--brass2);
+  outline-offset: 3px;
 }
 
 .check {
@@ -619,7 +640,7 @@ button.solve {
   display: grid;
   place-items: center;
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  background: rgba(0, 0, 0, .5);
+  background: rgba(40, 30, 70, .38);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   animation: modalFadeIn .2s ease-out both;
@@ -769,11 +790,6 @@ button.solve {
   border-radius: 12px;
 }
 
-:root[data-palette="midnight"] .modal,
-:root[data-palette="dusk"] .modal {
-  background: rgba(0, 0, 0, .66);
-}
-
 @media (max-height: 520px) {
   .modal-card-inner { padding: 16px 18px 16px; gap: 8px; }
   .modal-title { font-size: 1.35rem; }
@@ -785,10 +801,6 @@ button.solve {
   .modal,
   .modal-card { animation: none; }
 }
-
-:root { --veil: rgba(255, 255, 255, .6); }
-:root[data-palette="midnight"] { --veil: rgba(12, 23, 28, .6); }
-:root[data-palette="dusk"] { --veil: rgba(20, 19, 31, .6); }
 
 .board.solving .cell { pointer-events: none; }
 .board-wrap.dropping {
@@ -929,7 +941,46 @@ details.tool .body {
   line-height: 1.45;
 }
 
+/* ================= Planşet / telefon ================= */
 @media (max-width: 760px) {
   .layout { grid-template-columns: 1fr; gap: 22px; }
   .app { padding: 26px 16px 28px; }
+}
+
+/* Telefon: ≤ 480px */
+@media (max-width: 480px) {
+  :root { --cellsize: min(56px, calc((100vw - 64px) / 9)); }
+  body { padding: 10px; place-items: start center; }
+  .app { padding: 20px 10px 22px; border-radius: 20px; }
+  .head { margin-bottom: 16px; }
+  .rule { margin: 10px auto 8px; }
+  .sub { font-size: .88rem; }
+  .seg.top { width: 100%; margin-bottom: 16px; }
+  .seg.top button { flex: 1; padding: 0 8px; font-size: .9rem; }
+  .layout { gap: 18px; }
+  .board { border-radius: 10px; box-shadow: 0 0 0 4px var(--soft), 0 18px 28px -18px rgba(0, 0, 0, .5); }
+  .cage-hint { font-size: .82rem; }
+  .status { margin-top: 12px; padding: 6px 14px; font-size: .88rem; min-height: 34px; }
+  .digit-grid { gap: 6px; }
+  .digit-key { height: 50px; font-size: 1.4rem; }
+  .pad-row button, #undoBtn { height: 48px; }
+  .topline { flex-wrap: wrap; }
+  .cage-item { flex-direction: column; align-items: stretch; }
+  .cage-actions { justify-content: flex-end; }
+  .modal-card { border-radius: 18px; }
+  .modal-card-inner { padding: 18px 16px 16px; }
+  .step-btn { flex-basis: 50px; width: 50px; height: 50px; }
+}
+
+/* Çox kiçik telefon: ≤ 360px */
+@media (max-width: 360px) {
+  :root { --cellsize: min(56px, calc((100vw - 52px) / 9)); }
+  body { padding: 6px; }
+  .app { padding: 16px 8px 18px; border-radius: 16px; }
+  h1 { font-size: 1.7rem; }
+  .seg button { padding: 0 8px; font-size: .84rem; height: 36px; }
+  .cell { font-size: 1.15rem; }
+  .cell .cage-label { top: 3px; left: 4px; font-size: 8.5px; }
+  .digit-key { height: 46px; }
+  button { font-size: .92rem; }
 }
